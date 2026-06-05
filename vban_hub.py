@@ -12,11 +12,8 @@ UDP_PORT = 6980
 WEB_PORT = 8000
 CONFIG_FILE = "vban_config.json"
 
-# Default routes in case the config file doesn't exist yet
-DEFAULT_ROUTES = {
-    "CableA": [],
-    "CableB": []
-}
+# Start with a completely clean slate - no hardcoded cables!
+DEFAULT_ROUTES = {}
 
 # Global variable to store routing data in memory
 ROUTES = {}
@@ -50,7 +47,6 @@ def start_background_router():
             if data.startswith(b'VBAN'):
                 original_name = data[8:24].decode('ascii', errors='ignore').replace('\x00', '')
                 
-                # Read destinations from our global routing variable
                 if original_name in ROUTES:
                     for dest in ROUTES[original_name]:
                         if dest["active"]: 
@@ -77,25 +73,28 @@ def toggle_route(stream_name: str, dest_ip: str):
         for dest in ROUTES[stream_name]:
             if dest["dest_ip"] == dest_ip:
                 dest["active"] = not dest["active"]
-                save_config() # Save changes to the JSON file
+                save_config() 
                 return {"status": "success", "new_state": dest["active"]}
     return {"status": "error"}
 
 @app.post("/api/add")
 async def add_route(stream_name: str = Form(...), dest_ip: str = Form(...), new_name: str = Form(...)):
     """API to add a new destination IP via the Browser"""
+    # Force max lengths according to VBAN protocol rules (16 chars for names)
+    stream_name = stream_name[:16].strip()
+    new_name = new_name[:16].strip()
+
     if stream_name not in ROUTES:
         ROUTES[stream_name] = []
     
     # Check if IP already exists in this stream to prevent duplicates
     if any(d["dest_ip"] == dest_ip for d in ROUTES[stream_name]):
-        return HTMLResponse("<script>alert('This IP already exists in this Stream!'); window.location.href='/';</script>")
+        return HTMLResponse("<script>alert('This IP already exists for this Stream!'); window.location.href='/';</script>")
 
     new_destination = {"dest_ip": dest_ip, "new_name": new_name, "active": True}
     ROUTES[stream_name].append(new_destination)
     save_config()
     
-    # Reload page after adding
     return HTMLResponse("<script>window.location.href='/';</script>")
 
 @app.get("/", response_class=HTMLResponse)
@@ -118,7 +117,7 @@ def dashboard():
             .btn-on { background-color: #4CAF50; color: white; }
             .btn-off { background-color: #f44336; color: white; }
             .form-box { background: #2a2a2a; padding: 15px; border-radius: 8px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center;}
-            input, select { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #111; color: white; }
+            input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #111; color: white; min-width: 150px; }
             .btn-add { background-color: #2196F3; color: white; }
         </style>
     </head>
@@ -127,14 +126,11 @@ def dashboard():
             <h1>🎛️ VBAN Hub Dashboard</h1>
             
             <div class="card">
-                <h3 style="color: #2196F3; margin-top: 0;">➕ Add New Destination</h3>
+                <h3 style="color: #2196F3; margin-top: 0;">➕ Add New Route</h3>
                 <form action="/api/add" method="POST" class="form-box">
-                    <select name="stream_name" required>
-                        <option value="CableA">Incoming: CableA</option>
-                        <option value="CableB">Incoming: CableB</option>
-                    </select>
+                    <input type="text" name="stream_name" placeholder="Incoming (e.g. CableC)" required maxlength="16">
                     <input type="text" name="dest_ip" placeholder="Target IP (e.g. 192.168.1.10)" required>
-                    <input type="text" name="new_name" placeholder="New Name (e.g. CableAS4)" required maxlength="15">
+                    <input type="text" name="new_name" placeholder="New Name (e.g. CableCS1)" required maxlength="16">
                     <button type="submit" class="btn-add">Add Route</button>
                 </form>
             </div>
@@ -156,10 +152,16 @@ def dashboard():
 
             function renderUI(routes) {
                 const app = document.getElementById('app');
+                
+                if (Object.keys(routes).length === 0) {
+                    app.innerHTML = '<div class="card"><p style="text-align:center; color:#bbb;">No routes configured yet. Add one above!</p></div>';
+                    return;
+                }
+
                 app.innerHTML = '';
 
                 for (const [streamName, destinations] of Object.entries(routes)) {
-                    if (destinations.length === 0) continue; // Skip if no IPs are configured
+                    if (destinations.length === 0) continue; 
                     
                     let cardHtml = `<div class="card"><h2 style="color: #03dac6; border-bottom: 1px solid #333; padding-bottom: 10px;">Incoming: ${streamName}</h2>`;
                     
@@ -183,7 +185,6 @@ def dashboard():
             }
 
             fetchStatus();
-            // Update UI every 3 seconds in case it is open on another device
             setInterval(fetchStatus, 3000); 
         </script>
     </body>
