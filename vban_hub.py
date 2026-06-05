@@ -12,10 +12,7 @@ UDP_PORT = 6980
 WEB_PORT = 8000
 CONFIG_FILE = "vban_config.json"
 
-# Start with a completely clean slate - no hardcoded cables!
 DEFAULT_ROUTES = {}
-
-# Global variable to store routing data in memory
 ROUTES = {}
 
 # --- DATA MANAGEMENT FUNCTIONS (JSON) ---
@@ -77,17 +74,29 @@ def toggle_route(stream_name: str, dest_ip: str):
                 return {"status": "success", "new_state": dest["active"]}
     return {"status": "error"}
 
+# NEW: API Route to delete a destination
+@app.delete("/api/delete/{stream_name}/{dest_ip}")
+def delete_route(stream_name: str, dest_ip: str):
+    if stream_name in ROUTES:
+        # Filter out the deleted IP
+        ROUTES[stream_name] = [dest for dest in ROUTES[stream_name] if dest["dest_ip"] != dest_ip]
+        
+        # If the stream has no destinations left, remove the stream completely
+        if len(ROUTES[stream_name]) == 0:
+            del ROUTES[stream_name]
+            
+        save_config()
+        return {"status": "success"}
+    return {"status": "error"}
+
 @app.post("/api/add")
 async def add_route(stream_name: str = Form(...), dest_ip: str = Form(...), new_name: str = Form(...)):
-    """API to add a new destination IP via the Browser"""
-    # Force max lengths according to VBAN protocol rules (16 chars for names)
     stream_name = stream_name[:16].strip()
     new_name = new_name[:16].strip()
 
     if stream_name not in ROUTES:
         ROUTES[stream_name] = []
     
-    # Check if IP already exists in this stream to prevent duplicates
     if any(d["dest_ip"] == dest_ip for d in ROUTES[stream_name]):
         return HTMLResponse("<script>alert('This IP already exists for this Stream!'); window.location.href='/';</script>")
 
@@ -113,12 +122,17 @@ def dashboard():
             .card { background-color: #1e1e1e; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
             .route { display: flex; justify-content: space-between; align-items: center; background: #2c2c2c; padding: 10px 15px; margin-bottom: 10px; border-radius: 8px; }
             .ip { font-size: 0.9em; color: #bbb; }
+            .controls { display: flex; gap: 10px; align-items: center; }
             button { padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
             .btn-on { background-color: #4CAF50; color: white; }
             .btn-off { background-color: #f44336; color: white; }
+            .btn-add { background-color: #2196F3; color: white; }
+            /* NEW: Delete button styling */
+            .btn-del { background-color: #333; border: 1px solid #555; color: white; padding: 10px 15px; }
+            .btn-del:hover { background-color: #555; color: #ff5252; }
+            
             .form-box { background: #2a2a2a; padding: 15px; border-radius: 8px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center;}
             input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #111; color: white; min-width: 150px; }
-            .btn-add { background-color: #2196F3; color: white; }
         </style>
     </head>
     <body>
@@ -150,6 +164,14 @@ def dashboard():
                 fetchStatus(); 
             }
 
+            // NEW: Delete Route function with confirmation
+            async function deleteRoute(streamName, destIp) {
+                if(confirm(`Are you sure you want to delete the route to ${destIp}?`)) {
+                    await fetch(`/api/delete/${streamName}/${destIp}`, { method: 'DELETE' });
+                    fetchStatus(); 
+                }
+            }
+
             function renderUI(routes) {
                 const app = document.getElementById('app');
                 
@@ -174,7 +196,10 @@ def dashboard():
                                     <strong>Outgoing: ${dest.new_name}</strong><br>
                                     <span class="ip">Target IP: ${dest.dest_ip}</span>
                                 </div>
-                                <button class="${btnClass}" onclick="toggleRoute('${streamName}', '${dest.dest_ip}')">${btnText}</button>
+                                <div class="controls">
+                                    <button class="${btnClass}" onclick="toggleRoute('${streamName}', '${dest.dest_ip}')">${btnText}</button>
+                                    <button class="btn-del" onclick="deleteRoute('${streamName}', '${dest.dest_ip}')" title="Delete">🗑️</button>
+                                </div>
                             </div>
                         `;
                     });
