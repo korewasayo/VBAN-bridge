@@ -40,12 +40,18 @@ def start_background_router():
 
     while True:
         try:
+            # addr[0] contains the Source IP (e.g., 192.168.1.50)
             data, addr = sock.recvfrom(2048)
+            source_ip = addr[0] 
+
             if data.startswith(b'VBAN'):
                 original_name = data[8:24].decode('ascii', errors='ignore').replace('\x00', '')
                 
-                if original_name in ROUTES:
-                    for dest in ROUTES[original_name]:
+                # The "Key" is now a combination of Source IP and Stream Name
+                route_key = f"{source_ip}::{original_name}"
+                
+                if route_key in ROUTES:
+                    for dest in ROUTES[route_key]:
                         if dest["active"]: 
                             name_bytes = dest["new_name"].encode('ascii')[:16].ljust(16, b'\x00')
                             modified_packet = data[:8] + name_bytes + data[24:]
@@ -64,44 +70,44 @@ def startup_event():
 def get_status():
     return ROUTES
 
-@app.post("/api/toggle/{stream_name}/{dest_ip}")
-def toggle_route(stream_name: str, dest_ip: str):
-    if stream_name in ROUTES:
-        for dest in ROUTES[stream_name]:
+@app.post("/api/toggle/{source_ip}/{stream_name}/{dest_ip}")
+def toggle_route(source_ip: str, stream_name: str, dest_ip: str):
+    route_key = f"{source_ip}::{stream_name}"
+    if route_key in ROUTES:
+        for dest in ROUTES[route_key]:
             if dest["dest_ip"] == dest_ip:
                 dest["active"] = not dest["active"]
                 save_config() 
                 return {"status": "success", "new_state": dest["active"]}
     return {"status": "error"}
 
-# NEW: API Route to delete a destination
-@app.delete("/api/delete/{stream_name}/{dest_ip}")
-def delete_route(stream_name: str, dest_ip: str):
-    if stream_name in ROUTES:
-        # Filter out the deleted IP
-        ROUTES[stream_name] = [dest for dest in ROUTES[stream_name] if dest["dest_ip"] != dest_ip]
-        
-        # If the stream has no destinations left, remove the stream completely
-        if len(ROUTES[stream_name]) == 0:
-            del ROUTES[stream_name]
-            
+@app.delete("/api/delete/{source_ip}/{stream_name}/{dest_ip}")
+def delete_route(source_ip: str, stream_name: str, dest_ip: str):
+    route_key = f"{source_ip}::{stream_name}"
+    if route_key in ROUTES:
+        ROUTES[route_key] = [dest for dest in ROUTES[route_key] if dest["dest_ip"] != dest_ip]
+        if len(ROUTES[route_key]) == 0:
+            del ROUTES[route_key]
         save_config()
         return {"status": "success"}
     return {"status": "error"}
 
 @app.post("/api/add")
-async def add_route(stream_name: str = Form(...), dest_ip: str = Form(...), new_name: str = Form(...)):
+async def add_route(source_ip: str = Form(...), stream_name: str = Form(...), dest_ip: str = Form(...), new_name: str = Form(...)):
+    source_ip = source_ip.strip()
     stream_name = stream_name[:16].strip()
     new_name = new_name[:16].strip()
 
-    if stream_name not in ROUTES:
-        ROUTES[stream_name] = []
+    route_key = f"{source_ip}::{stream_name}"
+
+    if route_key not in ROUTES:
+        ROUTES[route_key] = []
     
-    if any(d["dest_ip"] == dest_ip for d in ROUTES[stream_name]):
+    if any(d["dest_ip"] == dest_ip for d in ROUTES[route_key]):
         return HTMLResponse("<script>alert('This IP already exists for this Stream!'); window.location.href='/';</script>")
 
     new_destination = {"dest_ip": dest_ip, "new_name": new_name, "active": True}
-    ROUTES[stream_name].append(new_destination)
+    ROUTES[route_key].append(new_destination)
     save_config()
     
     return HTMLResponse("<script>window.location.href='/';</script>")
@@ -127,12 +133,11 @@ def dashboard():
             .btn-on { background-color: #4CAF50; color: white; }
             .btn-off { background-color: #f44336; color: white; }
             .btn-add { background-color: #2196F3; color: white; }
-            /* NEW: Delete button styling */
             .btn-del { background-color: #333; border: 1px solid #555; color: white; padding: 10px 15px; }
             .btn-del:hover { background-color: #555; color: #ff5252; }
             
             .form-box { background: #2a2a2a; padding: 15px; border-radius: 8px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center;}
-            input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #111; color: white; min-width: 150px; }
+            input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #111; color: white; min-width: 140px; }
         </style>
     </head>
     <body>
@@ -142,9 +147,10 @@ def dashboard():
             <div class="card">
                 <h3 style="color: #2196F3; margin-top: 0;">➕ Add New Route</h3>
                 <form action="/api/add" method="POST" class="form-box">
-                    <input type="text" name="stream_name" placeholder="Incoming (e.g. CableC)" required maxlength="16">
+                    <input type="text" name="source_ip" placeholder="Sender IP (e.g. 192.168.1.50)" required>
+                    <input type="text" name="stream_name" placeholder="Stream Name (e.g. CableA)" required maxlength="16">
                     <input type="text" name="dest_ip" placeholder="Target IP (e.g. 192.168.1.10)" required>
-                    <input type="text" name="new_name" placeholder="New Name (e.g. CableCS1)" required maxlength="16">
+                    <input type="text" name="new_name" placeholder="New Name (e.g. CableAS1)" required maxlength="16">
                     <button type="submit" class="btn-add">Add Route</button>
                 </form>
             </div>
@@ -159,15 +165,14 @@ def dashboard():
                 renderUI(data);
             }
 
-            async function toggleRoute(streamName, destIp) {
-                await fetch(`/api/toggle/${streamName}/${destIp}`, { method: 'POST' });
+            async function toggleRoute(sourceIp, streamName, destIp) {
+                await fetch(`/api/toggle/${sourceIp}/${streamName}/${destIp}`, { method: 'POST' });
                 fetchStatus(); 
             }
 
-            // NEW: Delete Route function with confirmation
-            async function deleteRoute(streamName, destIp) {
+            async function deleteRoute(sourceIp, streamName, destIp) {
                 if(confirm(`Are you sure you want to delete the route to ${destIp}?`)) {
-                    await fetch(`/api/delete/${streamName}/${destIp}`, { method: 'DELETE' });
+                    await fetch(`/api/delete/${sourceIp}/${streamName}/${destIp}`, { method: 'DELETE' });
                     fetchStatus(); 
                 }
             }
@@ -182,10 +187,19 @@ def dashboard():
 
                 app.innerHTML = '';
 
-                for (const [streamName, destinations] of Object.entries(routes)) {
+                for (const [routeKey, destinations] of Object.entries(routes)) {
                     if (destinations.length === 0) continue; 
                     
-                    let cardHtml = `<div class="card"><h2 style="color: #03dac6; border-bottom: 1px solid #333; padding-bottom: 10px;">Incoming: ${streamName}</h2>`;
+                    // Split the key back into Source IP and Stream Name
+                    const [sourceIp, streamName] = routeKey.split("::");
+                    
+                    let cardHtml = `<div class="card">
+                        <h2 style="color: #03dac6; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 5px;">
+                            ${streamName}
+                        </h2>
+                        <p style="color: #bbb; margin-top: 0; font-size: 0.9em; margin-bottom: 15px;">
+                            Expected from: <strong>${sourceIp}</strong>
+                        </p>`;
                     
                     destinations.forEach(dest => {
                         const btnClass = dest.active ? 'btn-on' : 'btn-off';
@@ -193,12 +207,12 @@ def dashboard():
                         cardHtml += `
                             <div class="route">
                                 <div>
-                                    <strong>Outgoing: ${dest.new_name}</strong><br>
+                                    <strong>Out: ${dest.new_name}</strong><br>
                                     <span class="ip">Target IP: ${dest.dest_ip}</span>
                                 </div>
                                 <div class="controls">
-                                    <button class="${btnClass}" onclick="toggleRoute('${streamName}', '${dest.dest_ip}')">${btnText}</button>
-                                    <button class="btn-del" onclick="deleteRoute('${streamName}', '${dest.dest_ip}')" title="Delete">🗑️</button>
+                                    <button class="${btnClass}" onclick="toggleRoute('${sourceIp}', '${streamName}', '${dest.dest_ip}')">${btnText}</button>
+                                    <button class="btn-del" onclick="deleteRoute('${sourceIp}', '${streamName}', '${dest.dest_ip}')" title="Delete">🗑️</button>
                                 </div>
                             </div>
                         `;
