@@ -13,7 +13,19 @@ router = APIRouter(prefix="/api/vban", tags=["vban"])
 @router.get("/status")
 async def get_status(user: dict = Depends(require_auth)):
     """Get all VBAN routes and their status."""
-    return vban_engine.get_routes()
+    routes = vban_engine.get_routes()
+    result = []
+    for key, dests in routes.items():
+        if "::" in key:
+            source_ip, stream_name = key.split("::", 1)
+            for dest in dests:
+                result.append({
+                    "source_ip": source_ip,
+                    "stream_name": stream_name,
+                    "dest_ip": dest["dest_ip"],
+                    "active": dest.get("active", False)
+                })
+    return result
 
 
 @router.post("/toggle/{source_ip}/{stream_name}/{dest_ip}")
@@ -51,13 +63,13 @@ async def add_route(
     source_ip: str = Form(...),
     stream_name: str = Form(...),
     dest_ip: str = Form(...),
-    new_name: str = Form(...),
+    new_name: str = Form(""),
     user: dict = Depends(require_auth),
 ):
     """Add a new VBAN route."""
     source_ip = source_ip.strip()
     stream_name = stream_name[:16].strip()
-    new_name = new_name[:16].strip()
+    new_name = new_name.strip()[:16] if new_name.strip() else stream_name
 
     try:
         vban_engine.add_route(source_ip, stream_name, dest_ip, new_name)

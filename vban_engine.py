@@ -83,6 +83,8 @@ def add_route(source_ip: str, stream_name: str, dest_ip: str, new_name: str):
         _save_config_nolock()
 
 def start_background_router():
+    load_config()
+    
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 1024)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024 * 1024)
@@ -93,8 +95,6 @@ def start_background_router():
         return
     
     logger.info(f"🎧 VBAN Audio Engine running silently on port {UDP_PORT}...")
-
-    load_config()
 
     while True:
         try:

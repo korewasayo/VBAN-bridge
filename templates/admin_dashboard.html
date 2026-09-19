@@ -72,20 +72,26 @@
             <h3>Audio Channels (VBAN)</h3>
             <div class="card" style="background-color: var(--bg-element); margin-top:15px;">
                 <h4>Add Route</h4>
-                <form id="add-route-form" onsubmit="addRoute(event)" class="flex-row" style="align-items: flex-end;">
-                    <div class="form-group" style="margin-bottom:0; flex:1;">
-                        <label>Source IP</label>
-                        <input type="text" id="route_src_ip" class="form-control" required>
+                <form action="/api/vban/add" method="POST" class="form-box">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label>Stream Name</label>
+                            <input type="text" class="form-control" id="route_stream" name="stream_name" placeholder="CableAS1" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label>Source IP (Sender)</label>
+                            <input type="text" class="form-control" id="route_src_ip" name="source_ip" placeholder="127.0.0.1" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label>Destination IP</label>
+                            <input type="text" class="form-control" id="route_dest_ip" name="dest_ip" placeholder="127.0.0.1" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label>Display Name (optional)</label>
+                            <input type="text" class="form-control" id="route_name" name="new_name" placeholder="Living Room">
+                        </div>
                     </div>
-                    <div class="form-group" style="margin-bottom:0; flex:1;">
-                        <label>Stream Name</label>
-                        <input type="text" id="route_stream" class="form-control" required>
-                    </div>
-                    <div class="form-group" style="margin-bottom:0; flex:1;">
-                        <label>Dest IP</label>
-                        <input type="text" id="route_dest_ip" class="form-control" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Add Route</button>
+                    <button type="submit" class="btn btn-primary">➕ Add Route</button>
                 </form>
             </div>
             
@@ -365,26 +371,27 @@
                         <td>${item.dest_ip}</td>
                         <td><span class="badge ${item.active ? 'badge-approved' : 'badge-played'}">${item.active ? 'ON' : 'OFF'}</span></td>
                         <td>
-                            <button class="btn btn-secondary btn-sm" onclick="toggleRoute('${item.id}')">Toggle</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteRoute('${item.id}')">🗑️</button>
+                            <button class="btn btn-secondary btn-sm" onclick="toggleRoute('${item.source_ip}', '${item.stream_name}', '${item.dest_ip}')">Toggle</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteRoute('${item.source_ip}', '${item.stream_name}', '${item.dest_ip}')">🗑️</button>
                         </td>
                     </tr>
                 `).join('');
             } catch (e) { document.getElementById('channels-tbody').innerHTML = '<tr><td colspan="5" class="text-center">Failed to load channels</td></tr>'; }
         }
         
-        async function addRoute(e) {
-            e.preventDefault();
-            // Placeholder post for channel adding
-            const body = {
-                source_ip: document.getElementById('route_src_ip').value,
-                stream_name: document.getElementById('route_stream').value,
-                dest_ip: document.getElementById('route_dest_ip').value
-            };
+        async function toggleRoute(sourceIp, streamName, destIp) {
             try {
-                await fetchAPI('/api/vban/routes', 'POST', body);
-                showToast('Route added');
-                e.target.reset();
+                await fetch(`/api/vban/toggle/${sourceIp}/${streamName}/${destIp}`, { method: 'POST' });
+                showToast('Route toggled');
+                fetchChannels();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function deleteRoute(sourceIp, streamName, destIp) {
+            if (!confirm('Are you sure you want to delete this route?')) return;
+            try {
+                await fetch(`/api/vban/delete/${sourceIp}/${streamName}/${destIp}`, { method: 'DELETE' });
+                showToast('Route deleted');
                 fetchChannels();
             } catch (e) { showToast(e.message, 'error'); }
         }
@@ -471,7 +478,7 @@
         async function deactivateUser(id) {
             if (!confirm("Deactivate this user?")) return;
             try {
-                await fetchAPI(`/admin/api/users/${id}/deactivate`, 'POST');
+                await fetchAPI(`/admin/api/users/${id}`, 'DELETE');
                 showToast('User deactivated');
                 fetchUsers();
             } catch (e) { showToast(e.message, 'error'); }
