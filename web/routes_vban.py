@@ -2,8 +2,8 @@
 
 Handles VBAN audio routing configuration: add, toggle, delete routes.
 """
-from fastapi import APIRouter, Request, Depends, HTTPException, Form, Cookie
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Request, Depends, HTTPException, Form
+from fastapi.responses import RedirectResponse
 from security.rbac import require_auth
 import vban_engine
 
@@ -24,17 +24,11 @@ async def toggle_route(
     user: dict = Depends(require_auth),
 ):
     """Toggle a VBAN route on/off."""
-    routes = vban_engine.get_routes()
-    route_key = f"{source_ip}::{stream_name}"
-
-    if route_key in routes:
-        for dest in routes[route_key]:
-            if dest["dest_ip"] == dest_ip:
-                dest["active"] = not dest["active"]
-                vban_engine.set_routes(routes)
-                return {"status": "success", "new_state": dest["active"]}
-
-    raise HTTPException(status_code=404, detail="Route not found")
+    try:
+        new_state = vban_engine.toggle_route(source_ip, stream_name, dest_ip)
+        return {"status": "success", "new_state": new_state}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Route not found")
 
 
 @router.delete("/delete/{source_ip}/{stream_name}/{dest_ip}")
@@ -45,19 +39,11 @@ async def delete_route(
     user: dict = Depends(require_auth),
 ):
     """Delete a VBAN route."""
-    routes = vban_engine.get_routes()
-    route_key = f"{source_ip}::{stream_name}"
-
-    if route_key in routes:
-        routes[route_key] = [
-            dest for dest in routes[route_key] if dest["dest_ip"] != dest_ip
-        ]
-        if len(routes[route_key]) == 0:
-            del routes[route_key]
-        vban_engine.set_routes(routes)
+    try:
+        vban_engine.delete_route(source_ip, stream_name, dest_ip)
         return {"status": "success"}
-
-    raise HTTPException(status_code=404, detail="Route not found")
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Route not found")
 
 
 @router.post("/add")
@@ -72,21 +58,10 @@ async def add_route(
     source_ip = source_ip.strip()
     stream_name = stream_name[:16].strip()
     new_name = new_name[:16].strip()
-    routes = vban_engine.get_routes()
 
-    route_key = f"{source_ip}::{stream_name}"
-
-    if route_key not in routes:
-        routes[route_key] = []
-
-    if any(d["dest_ip"] == dest_ip for d in routes[route_key]):
-        raise HTTPException(
-            status_code=409,
-            detail="This destination IP already exists for this stream."
-        )
-
-    new_destination = {"dest_ip": dest_ip, "new_name": new_name, "active": True}
-    routes[route_key].append(new_destination)
-    vban_engine.set_routes(routes)
+    try:
+        vban_engine.add_route(source_ip, stream_name, dest_ip, new_name)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
     return RedirectResponse(url="/admin/dashboard", status_code=303)

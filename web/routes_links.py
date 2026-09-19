@@ -21,7 +21,7 @@ async def generate_links(request: Request, data: dict, user: dict = Depends(requ
     base_url = f"https://{DOMAIN}/" if DOMAIN != "localhost" else "http://localhost:8000/"
     
     for _ in range(count):
-        token = await generate_access_link(created_by=user["id"], expiry_minutes=expiry_minutes)
+        token = await generate_access_link(created_by_user_id=user["id"], expiry_minutes=expiry_minutes)
         urls.append(f"{base_url}?token={token}")
         
     ip = get_client_ip(request)

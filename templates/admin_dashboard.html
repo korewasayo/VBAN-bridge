@@ -416,18 +416,18 @@
             const count = document.getElementById('link_count').value;
             const hours = document.getElementById('link_expiry').value;
             try {
-                const res = await fetchAPI('/admin/api/links/generate', 'POST', { count: parseInt(count), expiry_hours: parseInt(hours) });
+                const res = await fetchAPI('/admin/api/links/generate', 'POST', { count: parseInt(count), expiry_minutes: parseInt(hours) * 60 });
                 const resultDiv = document.getElementById('generated-links-result');
                 resultDiv.style.display = 'block';
-                resultDiv.innerHTML = res.links.map(l => `<div>${window.location.origin}/login?token=${l}</div>`).join('');
-                showToast(`${res.links.length} links generated`);
+                resultDiv.innerHTML = res.urls.map(url => `<div><a href="${url}" target="_blank" style="color: inherit;">${url}</a></div>`).join('');
+                showToast(`${res.urls.length} links generated`);
                 fetchLinks();
             } catch (e) { showToast(e.message, 'error'); }
         }
 
         async function revokeLink(id) {
             try {
-                await fetchAPI(`/admin/api/links/${id}/revoke`, 'POST');
+                await fetchAPI(`/admin/api/links/${id}`, 'DELETE');
                 showToast('Link revoked');
                 fetchLinks();
             } catch (e) { showToast(e.message, 'error'); }
