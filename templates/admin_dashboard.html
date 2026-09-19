@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VBAN Bridge - Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <h2>VBAN Bridge Admin 🎛️</h2>
+        <div class="user-info">
+            <span>Logged in as <strong>{{ user.username if user else 'Admin' }}</strong> ({{ user.role if user else 'Role' }})</span>
+            <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs-nav">
+            <button class="tab-btn active" onclick="switchAdminTab('queue')">Music Queue</button>
+            <button class="tab-btn" onclick="switchAdminTab('channels')">Audio Channels</button>
+            <button class="tab-btn" onclick="switchAdminTab('links')">Access Links</button>
+            <button class="tab-btn" onclick="switchAdminTab('users')">Users</button>
+            <button class="tab-btn" onclick="switchAdminTab('audit')">Audit Log</button>
+        </div>
+
+        <!-- Music Queue Tab -->
+        <div id="tab-queue" class="tab-pane active card">
+            <div class="card-header" style="border:none;">
+                <h3>Manage Music Queue</h3>
+                <button class="btn btn-secondary btn-sm" onclick="fetchQueue()">Refresh</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table" id="queue-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Requested By</th>
+                            <th>Time</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queue-tbody">
+                        <tr><td colspan="8" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Audio Channels Tab -->
+        <div id="tab-channels" class="tab-pane card">
+            <h3>Audio Channels (VBAN)</h3>
+            <div class="card" style="background-color: var(--bg-element); margin-top:15px;">
+                <h4>Add Route</h4>
+                <form id="add-route-form" onsubmit="addRoute(event)" class="flex-row" style="align-items: flex-end;">
+                    <div class="form-group" style="margin-bottom:0; flex:1;">
+                        <label>Source IP</label>
+                        <input type="text" id="route_src_ip" class="form-control" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0; flex:1;">
+                        <label>Stream Name</label>
+                        <input type="text" id="route_stream" class="form-control" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0; flex:1;">
+                        <label>Dest IP</label>
+                        <input type="text" id="route_dest_ip" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Route</button>
+                </form>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Stream Name</th>
+                            <th>Source</th>
+                            <th>Destination</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="channels-tbody">
+                        <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Access Links Tab -->
+        <div id="tab-links" class="tab-pane card">
+            <h3>Access Links</h3>
+            <div class="card" style="background-color: var(--bg-element); margin-top:15px;">
+                <h4>Generate New Links</h4>
+                <form id="generate-links-form" onsubmit="generateLinks(event)" class="flex-row" style="align-items: flex-end;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Count</label>
+                        <input type="number" id="link_count" class="form-control" value="1" min="1" max="50" style="width: 100px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Expires In</label>
+                        <select id="link_expiry" class="form-control">
+                            <option value="24">24 Hours</option>
+                            <option value="48">48 Hours</option>
+                            <option value="168">7 Days</option>
+                            <option value="0">Never</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success">Generate</button>
+                </form>
+                <div id="generated-links-result" class="mt-2" style="display:none; padding:10px; background:var(--bg-main); border-radius:6px; font-family:monospace;"></div>
+            </div>
+
+            <div class="table-responsive mt-2">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Token</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                            <th>Created At</th>
+                            <th>Used At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="links-tbody">
+                        <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="tab-users" class="tab-pane card">
+            <h3>User Management</h3>
+            <div class="card" style="background-color: var(--bg-element); margin-top:15px;">
+                <h4>Create User</h4>
+                <form id="create-user-form" onsubmit="createUser(event)" class="flex-row" style="align-items: flex-end;">
+                    <div class="form-group" style="margin-bottom:0; flex:1;">
+                        <label>Username</label>
+                        <input type="text" id="new_username" class="form-control" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0; flex:1;">
+                        <label>Password</label>
+                        <input type="password" id="new_password" class="form-control" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0; flex:1;">
+                        <label>Role</label>
+                        <select id="new_role" class="form-control">
+                            <option value="user">User</option>
+                            <option value="moderator">Moderator</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create User</button>
+                </form>
+            </div>
+
+            <div class="table-responsive mt-2">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody">
+                        <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Audit Log Tab -->
+        <div id="tab-audit" class="tab-pane card">
+            <div class="card-header" style="border:none;">
+                <h3>System Audit Log</h3>
+                <button class="btn btn-secondary btn-sm" onclick="fetchAudit()">Refresh</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Details</th>
+                            <th>IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-tbody">
+                        <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script>
+        // Tab Management
+        function switchAdminTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabId).classList.add('active');
+
+            // Fetch data based on tab
+            if (tabId === 'queue') fetchQueue();
+            if (tabId === 'channels') fetchChannels();
+            if (tabId === 'links') fetchLinks();
+            if (tabId === 'users') fetchUsers();
+            if (tabId === 'audit') fetchAudit();
+        }
+
+        // Utils
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = type === 'success' ? `✅ ${message}` : `❌ ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 5000);
+        }
+
+        function getBadgeClass(status) {
+            if (!status) return 'badge-played';
+            switch(status.toLowerCase()) {
+                case 'pending': return 'badge-pending';
+                case 'approved': return 'badge-approved';
+                case 'playing': return 'badge-playing';
+                case 'played': return 'badge-played';
+                case 'rejected': return 'badge-rejected';
+                case 'active': return 'badge-approved';
+                case 'used': return 'badge-played';
+                case 'expired': return 'badge-rejected';
+                default: return 'badge-played';
+            }
+        }
+
+        async function fetchAPI(url, method = 'GET', body = null) {
+            const options = { method, headers: {} };
+            if (body) {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            }
+            const res = await fetch(url, options);
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || 'API Error');
+            }
+            return await res.json();
+        }
+
+        // Queue Management
+        async function fetchQueue() {
+            try {
+                const data = await fetchAPI('/admin/api/requests');
+                const tbody = document.getElementById('queue-tbody');
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center">No requests found.</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.map((item, i) => `
+                    <tr>
+                        <td>${item.id}</td>
+                        <td><strong>${item.title || '-'}</strong></td>
+                        <td>${item.artist || '-'}</td>
+                        <td>${item.type}</td>
+                        <td><span class="badge ${getBadgeClass(item.status)}">${item.status}</span></td>
+                        <td>${item.requested_by || 'Unknown'}</td>
+                        <td>${new Date(item.created_at).toLocaleString()}</td>
+                        <td>${getQueueActions(item)}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function getQueueActions(item) {
+            let btns = '';
+            const status = (item.status || '').toLowerCase();
+            if (status === 'pending') {
+                btns += `<button class="btn btn-success btn-sm" onclick="updateReq(${item.id}, 'approve')">✅</button> `;
+                btns += `<button class="btn btn-warning btn-sm" onclick="rejectReq(${item.id})">❌</button> `;
+                btns += `<button class="btn btn-danger btn-sm" onclick="deleteReq(${item.id})">🗑️</button>`;
+            } else if (status === 'approved') {
+                btns += `<button class="btn btn-primary btn-sm" onclick="updateReq(${item.id}, 'play')">▶️ Play</button> `;
+                btns += `<button class="btn btn-danger btn-sm" onclick="deleteReq(${item.id})">🗑️</button>`;
+            } else if (status === 'playing') {
+                btns += `<button class="btn btn-secondary btn-sm" onclick="updateReq(${item.id}, 'stop')">⏹️ Stop</button>`;
+            } else {
+                btns += `<button class="btn btn-danger btn-sm" onclick="deleteReq(${item.id})">🗑️</button>`;
+            }
+            return btns;
+        }
+
+        async function updateReq(id, action) {
+            try {
+                await fetchAPI(`/admin/api/requests/${id}/${action}`, 'POST');
+                showToast(`Request ${action}d successfully`);
+                fetchQueue();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function rejectReq(id) {
+            const reason = prompt("Reason for rejection:");
+            if (reason === null) return;
+            try {
+                await fetchAPI(`/admin/api/requests/${id}/reject`, 'POST', { reason });
+                showToast('Request rejected');
+                fetchQueue();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function deleteReq(id) {
+            if (!confirm('Are you sure you want to delete this request?')) return;
+            try {
+                await fetchAPI(`/admin/api/requests/${id}`, 'DELETE');
+                showToast('Request deleted');
+                fetchQueue();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        // Channels (Placeholders matching typical endpoints)
+        async function fetchChannels() {
+            try {
+                const data = await fetchAPI('/api/vban/status');
+                const tbody = document.getElementById('channels-tbody');
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No routes configured.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${item.stream_name}</td>
+                        <td>${item.source_ip}</td>
+                        <td>${item.dest_ip}</td>
+                        <td><span class="badge ${item.active ? 'badge-approved' : 'badge-played'}">${item.active ? 'ON' : 'OFF'}</span></td>
+                        <td>
+                            <button class="btn btn-secondary btn-sm" onclick="toggleRoute('${item.id}')">Toggle</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteRoute('${item.id}')">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { document.getElementById('channels-tbody').innerHTML = '<tr><td colspan="5" class="text-center">Failed to load channels</td></tr>'; }
+        }
+        
+        async function addRoute(e) {
+            e.preventDefault();
+            // Placeholder post for channel adding
+            const body = {
+                source_ip: document.getElementById('route_src_ip').value,
+                stream_name: document.getElementById('route_stream').value,
+                dest_ip: document.getElementById('route_dest_ip').value
+            };
+            try {
+                await fetchAPI('/api/vban/routes', 'POST', body);
+                showToast('Route added');
+                e.target.reset();
+                fetchChannels();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        // Links
+        async function fetchLinks() {
+            try {
+                const data = await fetchAPI('/admin/api/links');
+                const tbody = document.getElementById('links-tbody');
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">No links found.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td><code style="background: var(--bg-main); padding: 2px 6px; border-radius: 4px;">${item.token.substring(0,8)}...</code></td>
+                        <td><span class="badge ${getBadgeClass(item.status)}">${item.status}</span></td>
+                        <td>${item.created_by_name || 'System'}</td>
+                        <td>${new Date(item.created_at).toLocaleString()}</td>
+                        <td>${item.used_at ? new Date(item.used_at).toLocaleString() : '-'}</td>
+                        <td>${item.status === 'active' ? `<button class="btn btn-warning btn-sm" onclick="revokeLink('${item.id}')">Revoke</button>` : ''}</td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function generateLinks(e) {
+            e.preventDefault();
+            const count = document.getElementById('link_count').value;
+            const hours = document.getElementById('link_expiry').value;
+            try {
+                const res = await fetchAPI('/admin/api/links/generate', 'POST', { count: parseInt(count), expiry_hours: parseInt(hours) });
+                const resultDiv = document.getElementById('generated-links-result');
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = res.links.map(l => `<div>${window.location.origin}/login?token=${l}</div>`).join('');
+                showToast(`${res.links.length} links generated`);
+                fetchLinks();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function revokeLink(id) {
+            try {
+                await fetchAPI(`/admin/api/links/${id}/revoke`, 'POST');
+                showToast('Link revoked');
+                fetchLinks();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        // Users
+        async function fetchUsers() {
+            try {
+                const data = await fetchAPI('/admin/api/users');
+                const tbody = document.getElementById('users-tbody');
+                if (!data || data.length === 0) return;
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${item.username}</td>
+                        <td><span class="badge badge-played">${item.role}</span></td>
+                        <td><span class="badge ${item.is_active ? 'badge-approved' : 'badge-rejected'}">${item.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td>${new Date(item.created_at).toLocaleString()}</td>
+                        <td>
+                            ${item.is_active ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser('${item.id}')">Deactivate</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function createUser(e) {
+            e.preventDefault();
+            const body = {
+                username: document.getElementById('new_username').value,
+                password: document.getElementById('new_password').value,
+                role: document.getElementById('new_role').value
+            };
+            try {
+                await fetchAPI('/admin/api/users', 'POST', body);
+                showToast('User created');
+                e.target.reset();
+                fetchUsers();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function deactivateUser(id) {
+            if (!confirm("Deactivate this user?")) return;
+            try {
+                await fetchAPI(`/admin/api/users/${id}/deactivate`, 'POST');
+                showToast('User deactivated');
+                fetchUsers();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        // Audit Log
+        async function fetchAudit() {
+            try {
+                const data = await fetchAPI('/admin/api/audit-log');
+                const tbody = document.getElementById('audit-tbody');
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No audit logs.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${new Date(item.timestamp).toLocaleString()}</td>
+                        <td>${item.username || 'System'}</td>
+                        <td><strong>${item.action}</strong></td>
+                        <td>${item.details || '-'}</td>
+                        <td>${item.ip_address || '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        // Init
+        fetchQueue();
+        setInterval(() => {
+            const activeTab = document.querySelector('.tab-pane.active').id;
+            if (activeTab === 'tab-queue') fetchQueue();
+        }, 5000);
+    </script>
+</body>
+</html>

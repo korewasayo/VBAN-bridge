@@ -1,25 +1,50 @@
-# 🚀 Setup Instructions
-This project features a Web Dashboard to easily manage and route your VBAN audio streams across multiple computers.
+# 🎵 VBAN-Bridge — Music Request System
 
-## Step 1: Install Dependencies
-Open your terminal and install the required web framework libraries:
+A web-based music request system built on top of VBAN audio routing. Users access via Cloudflare-tunneled domain, submit song requests or upload MP3 files, and admins manage the queue through an RBAC-secured dashboard.
+
+## Features
+- 🔊 VBAN audio routing between network devices
+- 🎶 Music request queue (FIFO)
+- 📤 MP3 file upload with multi-layer security validation
+- 🔐 Role-Based Access Control (Super Admin, Admin, Moderator, User)
+- 🔗 One-time access links (single-use, auto-expiring)
+- 🌐 Cloudflare Tunnel integration (IP hidden, DDoS protected)
+- 🎛️ Admin dashboard for managing requests, channels, users, and links
+
+## Quick Start
+
+### 1. Install Dependencies
 ```bash
-    pip install fastapi uvicorn
+pip install -r requirements.txt
 ```
 
-## Step 2: Run the Hub
-Start the application from your terminal:
+### 2. Configure Environment
 ```bash
-    python3 vban_router.py
+cp .env.example .env
+# Edit .env with your settings
 ```
-(Make sure to replace vban_router.py with the actual name of your file if you changed it).
 
-## Step 3: Open the Dashboard
-1. Open a web browser on any device connected to your network.
-2. Type the IP address of your Raspberry Pi, followed by port 8000.
-    - Example: `http://192.168.1.42:8000`
+### 3. Run the Server
+```bash
+python server.py
+```
 
-## Step 4: Add Your Routes
-1. Use the "➕ Add New Route" section at the top of the webpage.
-2. Enter the Sender IP, the Stream Name, and your Target IP.
-3. Click Add Route. The system will automatically create a `vban_config.json` file to remember your settings even if you restart the Raspberry Pi!
+### 4. Run with Cloudflare Tunnel
+```bash
+python server.py --tunnel
+```
+
+### 5. Open the Dashboard
+Navigate to `http://localhost:8000` or your Cloudflare domain.
+
+## Default Admin Login
+- Username: `admin` (or value of SUPER_ADMIN_USERNAME env var)
+- Password: `changeme123` (or value of SUPER_ADMIN_PASSWORD env var)
+
+⚠️ **Change the default password immediately after first login!**
+
+## Architecture
+- **Backend**: FastAPI + SQLite (async via aiosqlite)
+- **Audio**: VBAN UDP protocol + ffplay for MP3 playback
+- **Security**: RBAC, one-time links, rate limiting, file validation
+- **Tunnel**: Cloudflare Tunnel (cloudflared)

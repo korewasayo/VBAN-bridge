@@ -1,0 +1,5 @@
+# Ignore all uploaded files
+*.mp3
+*.wav
+*.tmp
+!.gitignore

@@ -3,62 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VBAN Hub - Secure Login</title>
-    <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, sans-serif; 
-            background-color: #0f0f0f; 
-            color: #fff; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-        }
-        .login-box { 
-            background-color: #1e1e1e; 
-            padding: 40px; 
-            border-radius: 12px; 
-            box-shadow: 0 8px 16px rgba(0,0,0,0.5); 
-            text-align: center;
-            width: 100%;
-            max-width: 350px;
-        }
-        h2 { color: #4CAF50; margin-bottom: 20px; }
-        input[type="text"] { 
-            width: 90%; 
-            padding: 12px; 
-            margin-bottom: 20px; 
-            border-radius: 6px; 
-            border: 1px solid #444; 
-            background: #111; 
-            color: white; 
-            font-size: 16px; 
-            text-align: center;
-        }
-        button { 
-            width: 100%; 
-            padding: 12px; 
-            background-color: #2196F3; 
-            color: white; 
-            border: none; 
-            border-radius: 6px; 
-            font-size: 16px; 
-            font-weight: bold; 
-            cursor: pointer; 
-            transition: 0.2s; 
-        }
-        button:hover { background-color: #1976D2; }
-    </style>
+    <title>VBAN Bridge - Access</title>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="login-box">
-        <h2>🔒 Access Request</h2>
-        <p style="color: #bbb; font-size: 0.9em; margin-bottom: 30px;">Enter your one-time password to access the music dashboard.</p>
-        <form action="/login" method="POST">
-            <input type="text" name="otp" placeholder="Enter OTP" required autocomplete="off">
-            <button type="submit">Unlock Access</button>
-        </form>
+    <div class="login-wrapper">
+        <div class="card login-card">
+            <div class="text-center mb-2">
+                <h1 style="font-size: 3rem; margin-bottom: 10px;">🎵</h1>
+                <h2>VBAN Bridge</h2>
+                <p style="color: var(--text-secondary);">Enter your access token to request music</p>
+            </div>
+
+            {% if error %}
+            <div class="error-message">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form action="/login" method="POST">
+                <div class="form-group">
+                    <label for="token">Access Token</label>
+                    <input type="text" id="token" name="token" class="form-control" placeholder="e.g. ABC-123" required autofocus>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Enter</button>
+            </form>
+
+            <div class="text-center mt-2">
+                <a href="/admin/login" style="font-size: 0.9rem;">Admin? Login here</a>
+            </div>
+        </div>
     </div>
 </body>
 </html>

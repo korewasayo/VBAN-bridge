@@ -1,0 +1,103 @@
+from typing import Optional
+from .db import execute_query, fetch_one
+
+TABLES_SQL = [
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('super_admin', 'admin', 'moderator', 'user')),
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        ip_address TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        expires_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS access_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT UNIQUE NOT NULL,
+        created_by INTEGER NOT NULL,
+        used_by INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        used_at TEXT,
+        expires_at TEXT NOT NULL,
+        is_used INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (created_by) REFERENCES users(id),
+        FOREIGN KEY (used_by) REFERENCES users(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS music_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        title TEXT NOT NULL,
+        artist TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'playing', 'played')),
+        mp3_path TEXT,
+        source_type TEXT NOT NULL DEFAULT 'text_request' CHECK(source_type IN ('upload', 'text_request')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        reviewed_by INTEGER,
+        reviewed_at TEXT,
+        reject_reason TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (reviewed_by) REFERENCES users(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS audio_channels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        source_ip TEXT NOT NULL,
+        stream_name TEXT NOT NULL,
+        dest_ip TEXT NOT NULL,
+        dest_port INTEGER NOT NULL DEFAULT 6980,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_by INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        action TEXT NOT NULL,
+        details TEXT,
+        ip_address TEXT,
+        timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    """
+]
+
+async def init_db() -> None:
+    """Initialize the database by creating all tables if they do not exist."""
+    for sql in TABLES_SQL:
+        await execute_query(sql)
+
+async def seed_super_admin(username: str, password_hash: str) -> None:
+    """Seed the super admin user if not already present."""
+    existing_user = await fetch_one("SELECT id FROM users WHERE username = ?", (username,))
+    if not existing_user:
+        await execute_query(
+            "INSERT INTO users (username, password_hash, role, is_active) VALUES (?, ?, 'super_admin', 1)",
+            (username, password_hash)
+        )
+
+async def add_audit_log(user_id: Optional[int], action: str, details: Optional[str], ip_address: Optional[str]) -> None:
+    """Add a new audit log entry."""
+    await execute_query(
+        "INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+        (user_id, action, details, ip_address)
+    )

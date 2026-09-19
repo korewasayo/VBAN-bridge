@@ -1,44 +1,71 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from security.rate_limiter import rate_limiter
-from web.routes_vban import router as vban_router
-from web.routes_auth import router as auth_router
-from web.routes_admin import router as admin_router
-from vban_engine import load_config
+"""FastAPI application factory for VBAN-Bridge.
 
-app = FastAPI(title="VBAN Router Hub - Secure Edition")
-
-@app.on_event("startup")
-def startup_event():
-    load_config()
-
-@app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next):
-    # Simple IP extraction (in production behind Cloudflare, use X-Forwarded-For)
-    client_ip = request.headers.get("X-Forwarded-For", request.client.host)
-    if not rate_limiter.is_allowed(client_ip):
-        return HTMLResponse("Rate limit exceeded. Please wait.", status_code=429)
-    response = await call_next(request)
-    return response
-
-# Include all modular routes
-app.include_router(vban_router)
-app.include_router(auth_router)
-app.include_router(admin_router)
-
-# Mount templates/static if needed (for now we return HTML directly from files in routes)
+Sets up middleware, mounts routers, serves static files and templates.
+"""
 import os
-from security.tokens import is_token_valid
+from typing import Callable
 
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request):
-    token = request.cookies.get("session_token")
-    if not token or not is_token_valid(token, request.client.host):
-        return RedirectResponse(url="/")
-        
-    template_path = os.path.join("templates", "dashboard.html")
-    if os.path.exists(template_path):
-        with open(template_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(f.read())
-    return HTMLResponse("<h1>Dashboard Template Missing</h1>")
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
+from config import BASE_DIR
+from security.rate_limiter import rate_limiter
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract real client IP, accounting for Cloudflare and reverse proxies."""
+    return (
+        request.headers.get("CF-Connecting-IP")
+        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.client.host
+    )
+
+
+def create_application(lifespan: Callable) -> FastAPI:
+    """Create and configure the FastAPI application."""
+    app = FastAPI(
+        title="VBAN-Bridge — Music Request System",
+        lifespan=lifespan,
+    )
+
+    # --- MIDDLEWARE ---
+
+    @app.middleware("http")
+    async def rate_limit_middleware(request: Request, call_next):
+        """Rate limit by client IP."""
+        client_ip = get_client_ip(request)
+        if not rate_limiter.is_allowed(client_ip):
+            return HTMLResponse("Rate limit exceeded. Please wait.", status_code=429)
+        response = await call_next(request)
+        return response
+
+    @app.middleware("http")
+    async def security_headers_middleware(request: Request, call_next):
+        """Add security headers to all responses."""
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+    # --- STATIC FILES ---
+    static_dir = os.path.join(BASE_DIR, "static")
+    if os.path.exists(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    # --- ROUTERS ---
+    from web.routes_auth import router as auth_router
+    from web.routes_admin import router as admin_router
+    from web.routes_vban import router as vban_router
+    from web.routes_links import router as links_router
+    from web.routes_requests import router as requests_router
+
+    app.include_router(auth_router)
+    app.include_router(admin_router)
+    app.include_router(vban_router)
+    app.include_router(links_router)
+    app.include_router(requests_router)
+
+    return app

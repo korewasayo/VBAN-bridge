@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VBAN Bridge - Admin Login</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="card login-card">
+            <div class="text-center mb-2">
+                <h1 style="font-size: 3rem; margin-bottom: 10px;">🛡️</h1>
+                <h2>Admin Control</h2>
+                <p style="color: var(--text-secondary);">Sign in to manage requests and system</p>
+            </div>
+
+            {% if error %}
+            <div class="error-message">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form action="/admin/login" method="POST">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" class="form-control" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+            </form>
+
+            <div class="text-center mt-2">
+                <a href="/login" style="font-size: 0.9rem;">Back to user login</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

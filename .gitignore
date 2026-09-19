@@ -1,2 +1,9 @@
 /venv
 vban_config.json
+/data/
+/uploads/mp3/*.mp3
+/uploads/quarantine/*
+!.gitkeep
+.env
+__pycache__/
+*.pyc
