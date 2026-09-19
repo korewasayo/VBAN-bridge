@@ -18,8 +18,12 @@ def get_client_ip(request: Request) -> str:
             request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or 
             request.client.host)
 
-@router.get("/", response_class=HTMLResponse)
-async def landing_page(request: Request, token: str = None):
+@router.get("/")
+async def root_redirect():
+    return RedirectResponse(url="/request", status_code=303)
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, token: str = None):
     if token:
         valid_link = await validate_and_consume_link(token)
         if valid_link:
@@ -37,11 +41,11 @@ async def landing_page(request: Request, token: str = None):
             await add_audit_log(user_id, "user_login", "Logged in via access link", ip)
             return response
             
-    return templates.TemplateResponse(request, "login.html")
+    return templates.TemplateResponse("login.html", {"request": request})
 
 @router.get("/admin/login", response_class=HTMLResponse)
 async def admin_login_page(request: Request):
-    return templates.TemplateResponse(request, "admin_login.html")
+    return templates.TemplateResponse("admin_login.html", {"request": request})
 
 @router.post("/admin/login")
 async def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
@@ -56,7 +60,7 @@ async def admin_login(request: Request, username: str = Form(...), password: str
         return response
     
     await add_audit_log(None, "admin_login_failed", f"Failed login attempt for {username}", ip)
-    return templates.TemplateResponse(request, "admin_login.html", context={"error": "Invalid username or password"})
+    return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid username or password"})
 
 @router.post("/login")
 async def legacy_login(request: Request, token: str = Form(...)):
@@ -76,7 +80,7 @@ async def legacy_login(request: Request, token: str = Form(...)):
         await add_audit_log(user_id, "user_login", "Logged in via OTP form", ip)
         return response
         
-    return templates.TemplateResponse(request, "login.html", context={"error": "Invalid or expired token"})
+    return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid or expired token"})
 
 @router.get("/logout")
 async def logout(request: Request):
@@ -84,6 +88,6 @@ async def logout(request: Request):
     if token:
         await invalidate_token(token)
     
-    response = RedirectResponse(url="/", status_code=303)
+    response = RedirectResponse(url="/request", status_code=303)
     response.delete_cookie("session_token")
     return response

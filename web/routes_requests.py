@@ -1,9 +1,10 @@
 import os
-from fastapi import APIRouter, Request, Depends, HTTPException, Form, UploadFile, File
+from fastapi import APIRouter, Request, Depends, HTTPException, Form, UploadFile, File, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from audio.downloader import download_audio_task
 
-from security.rbac import require_auth, require_permission
+from security.rbac import require_auth, require_permission, get_current_user
 from security.file_validator import validate_mp3, save_mp3, quarantine_file
 from database.db import fetch_all, fetch_one, execute_query
 from database.models import add_audit_log
@@ -18,21 +19,26 @@ def get_client_ip(request: Request) -> str:
             request.client.host)
 
 @router.get("/request", response_class=HTMLResponse)
-async def request_page(request: Request, user: dict = Depends(require_auth)):
-    return templates.TemplateResponse(request, "request_page.html", context={"user": user})
+async def request_page(request: Request, user: dict = Depends(get_current_user)):
+    return templates.TemplateResponse("request_page.html", {"request": request, "user": user})
 
 @router.post("/api/requests/submit")
-async def submit_request(request: Request, title: str = Form(...), artist: str = Form(""), user: dict = Depends(require_auth)):
+async def submit_request(request: Request, background_tasks: BackgroundTasks, title: str = Form(...), artist: str = Form(""), user: dict = Depends(get_current_user)):
+    user_id = user["id"] if user else None
     request_id = await execute_query(
         "INSERT INTO music_requests (user_id, title, artist, status, source_type) VALUES (?, ?, ?, 'pending', 'text_request')",
-        (user["id"], title, artist)
+        (user_id, title, artist)
     )
     ip = get_client_ip(request)
-    await add_audit_log(user["id"], "submit_request", f"Submitted text request: {title} by {artist}", ip)
+    await add_audit_log(user_id, "submit_request", f"Submitted text request: {title} by {artist}", ip)
+    
+    # Spawn background task to download the audio
+    background_tasks.add_task(download_audio_task, title, request_id, user_id, ip)
+    
     return {"status": "success", "request_id": request_id}
 
 @router.post("/api/requests/upload")
-async def upload_request(request: Request, title: str = Form(...), artist: str = Form(""), file: UploadFile = File(...), user: dict = Depends(require_auth)):
+async def upload_request(request: Request, title: str = Form(...), artist: str = Form(""), file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     file_data = await file.read()
     
     if len(file_data) > MAX_UPLOAD_SIZE_BYTES:
@@ -43,19 +49,21 @@ async def upload_request(request: Request, title: str = Form(...), artist: str =
         saved_path, save_error = save_mp3(file_data, file.filename)
         if not saved_path:
             raise HTTPException(status_code=500, detail=save_error)
+        
+        user_id = user["id"] if user else None
         request_id = await execute_query(
             "INSERT INTO music_requests (user_id, title, artist, status, source_type, mp3_path) VALUES (?, ?, ?, 'pending', 'upload', ?)",
-            (user["id"], title, artist, saved_path)
+            (user_id, title, artist, saved_path)
         )
         ip = get_client_ip(request)
-        await add_audit_log(user["id"], "submit_upload", f"Uploaded mp3 request: {title}", ip)
+        await add_audit_log(user_id, "submit_upload", f"Uploaded mp3 request: {title}", ip)
         return {"status": "success", "request_id": request_id}
     else:
         quarantine_file(file_data, file.filename, error_msg)
         raise HTTPException(status_code=400, detail=error_msg)
 
 @router.get("/api/requests/queue")
-async def get_queue(user: dict = Depends(require_auth)):
+async def get_queue(user: dict = Depends(get_current_user)):
     requests = await fetch_all(
         "SELECT id, title, artist, status, source_type, created_at FROM music_requests WHERE status IN ('pending', 'approved', 'playing') ORDER BY created_at ASC"
     )
@@ -114,6 +122,20 @@ async def play_request(request: Request, request_id: int, user: dict = Depends(r
             
     ip = get_client_ip(request)
     await add_audit_log(user["id"], "play_request", f"Playing request {request_id}", ip)
+    return {"status": "success"}
+
+@router.post("/admin/api/requests/{request_id}/stop")
+async def stop_request(request: Request, request_id: int, user: dict = Depends(require_permission("manage_requests"))):
+    await execute_query("UPDATE music_requests SET status = 'played' WHERE id = ?", (request_id,))
+    
+    try:
+        from audio.player import player
+        player.stop()
+    except Exception:
+        pass
+        
+    ip = get_client_ip(request)
+    await add_audit_log(user["id"], "stop_request", f"Stopped request {request_id}", ip)
     return {"status": "success"}
 
 @router.delete("/admin/api/requests/{request_id}")

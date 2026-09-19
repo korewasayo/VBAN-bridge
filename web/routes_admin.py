@@ -18,7 +18,7 @@ def get_client_ip(request: Request) -> str:
 
 @router.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, user: dict = Depends(require_role("admin", "super_admin"))):
-    return templates.TemplateResponse(request, "admin_dashboard.html", context={"user": user})
+    return templates.TemplateResponse("admin_dashboard.html", {"request": request, "user": user})
 
 @router.get("/admin/api/users")
 async def get_users(user: dict = Depends(require_permission("manage_users"))):
