@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- SERVER CONFIGURATIONS ---
 UDP_IP = "0.0.0.0"

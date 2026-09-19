@@ -79,6 +79,8 @@ def start_tunnel(port: int = 8000) -> None:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            encoding="utf-8",
+            errors="replace",
         )
 
         # Read and log tunnel output (captures the assigned URL)
