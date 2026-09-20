@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VBAN Bridge - Admin Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4">
+    <link rel="stylesheet" href="/static/css/style.css?v=6">
     <style>
         .dashboard-header {
             display: flex;
@@ -228,6 +228,12 @@
     <div id="player-bar" class="player-bar" style="display: none;">
         <!-- Transport controls -->
         <div class="sc-controls">
+            <button class="sc-btn" id="player-pause-btn" title="Pause/Resume">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                    <path d="M2 1h2v8H2zm4 0h2v8H6z" id="pause-icon"/>
+                    <path d="M2.5 1.5L8 5L2.5 8.5V1.5Z" id="play-icon" style="display: none;"/>
+                </svg>
+            </button>
             <button class="sc-btn" id="player-stop-btn" title="Stop">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10" rx="1"/></svg>
             </button>
@@ -559,11 +565,50 @@
         let _playerElapsedInterval = null;
         let _playerElapsedSeconds = 0;
         let _playerCurrentId = null;
+        let _playerDuration = 0;
+        let _playerStatusInterval = null;
 
         function formatTime(totalSeconds) {
             const m = Math.floor(totalSeconds / 60);
             const s = totalSeconds % 60;
             return m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        async function fetchPlayerStatus() {
+            try {
+                const res = await fetchAPI('/admin/api/player/status');
+                _playerDuration = res.duration || 0;
+                
+                if (res.elapsed !== undefined) {
+                    // Sync the client side elapsed time with the server
+                    _playerElapsedSeconds = Math.floor(res.elapsed);
+                    document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
+                    if (_playerDuration > 0) {
+                        let pct = (_playerElapsedSeconds / _playerDuration) * 100;
+                        if (pct > 100) pct = 100;
+                        document.getElementById('player-progress-fill').style.width = pct + '%';
+                    }
+                }
+                
+                // Keep UI in sync with backend state
+                if (res.volume !== undefined) {
+                    const volumeFill = document.querySelector('.sc-volume-fill');
+                    volumeFill.style.width = (res.volume * 100) + '%';
+                }
+                
+                const pauseIcon = document.getElementById('pause-icon');
+                const playIcon = document.getElementById('play-icon');
+                _isPausedState = res.is_paused;
+                if (_isPausedState) {
+                    pauseIcon.style.display = 'none';
+                    playIcon.style.display = '';
+                } else {
+                    pauseIcon.style.display = '';
+                    playIcon.style.display = 'none';
+                }
+            } catch (err) {
+                console.error("Status fetch error", err);
+            }
         }
 
         function updatePlayerBar(item) {
@@ -574,13 +619,16 @@
                     clearInterval(_playerElapsedInterval);
                     _playerElapsedInterval = null;
                 }
+                if (_playerStatusInterval) {
+                    clearInterval(_playerStatusInterval);
+                    _playerStatusInterval = null;
+                }
                 _playerCurrentId = null;
                 _playerElapsedSeconds = 0;
                 return;
             }
 
             bar.style.display = '';
-
             document.getElementById('player-title').textContent = item.title || 'Unknown Title';
             document.getElementById('player-artist').textContent = item.artist || 'Unknown Artist';
 
@@ -593,17 +641,90 @@
             if (_playerCurrentId !== item.id) {
                 _playerCurrentId = item.id;
                 _playerElapsedSeconds = 0;
+                _playerDuration = 0;
                 document.getElementById('player-elapsed').textContent = '0:00';
+                document.getElementById('player-progress-fill').style.width = '0%';
+                
+                _isPausedState = false;
+                document.getElementById('pause-icon').style.display = '';
+                document.getElementById('play-icon').style.display = 'none';
 
-                if (_playerElapsedInterval) {
-                    clearInterval(_playerElapsedInterval);
-                }
+                fetchPlayerStatus(); // get initial duration and volume
+
+                if (_playerElapsedInterval) clearInterval(_playerElapsedInterval);
+                if (_playerStatusInterval) clearInterval(_playerStatusInterval);
+                
+                _playerStatusInterval = setInterval(fetchPlayerStatus, 5000); // Poll status every 5s
+
                 _playerElapsedInterval = setInterval(function() {
-                    _playerElapsedSeconds++;
-                    document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
+                    if (!_isPausedState) {
+                        _playerElapsedSeconds++;
+                        document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
+                        
+                        if (_playerDuration > 0) {
+                            let pct = (_playerElapsedSeconds / _playerDuration) * 100;
+                            if (pct > 100) pct = 100;
+                            document.getElementById('player-progress-fill').style.width = pct + '%';
+                        }
+                    }
                 }, 1000);
             }
         }
+
+        let _isPausedState = false;
+        document.getElementById('player-pause-btn').addEventListener('click', async () => {
+            try {
+                const res = await fetchAPI('/admin/api/player/pause', 'POST');
+                _isPausedState = res.is_paused;
+                const pauseIcon = document.getElementById('pause-icon');
+                const playIcon = document.getElementById('play-icon');
+                if (_isPausedState) {
+                    pauseIcon.style.display = 'none';
+                    playIcon.style.display = '';
+                } else {
+                    pauseIcon.style.display = '';
+                    playIcon.style.display = 'none';
+                }
+            } catch (err) {
+                console.error(err);
+                showToast(err.message, 'error');
+            }
+        });
+
+        const volumeBar = document.querySelector('.sc-volume-bar');
+        const volumeFill = document.querySelector('.sc-volume-fill');
+        volumeBar.addEventListener('click', async (e) => {
+            const rect = volumeBar.getBoundingClientRect();
+            let p = (e.clientX - rect.left) / rect.width;
+            p = Math.max(0, Math.min(1, p));
+            volumeFill.style.width = (p * 100) + '%';
+            try {
+                await fetchAPI('/admin/api/player/volume', 'POST', { volume: p });
+            } catch (err) {
+                console.error('Volume error', err);
+                showToast(err.message, 'error');
+            }
+        });
+
+        const progressBar = document.querySelector('.sc-progress-bar');
+        progressBar.addEventListener('click', async (e) => {
+            if (!_playerDuration) return;
+            const rect = progressBar.getBoundingClientRect();
+            let p = (e.clientX - rect.left) / rect.width;
+            p = Math.max(0, Math.min(1, p));
+            
+            // Optimistic UI update
+            document.getElementById('player-progress-fill').style.width = (p * 100) + '%';
+            _playerElapsedSeconds = Math.floor(p * _playerDuration);
+            document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
+            
+            try {
+                await fetchAPI('/admin/api/player/seek', 'POST', { time: p * _playerDuration });
+            } catch (err) {
+                console.error('Seek error', err);
+                showToast(err.message, 'error');
+            }
+        });
     </script>
 </body>
 </html>

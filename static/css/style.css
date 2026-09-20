@@ -436,11 +436,12 @@ a:hover {
 .sc-progress-bar {
     flex: 1;
     height: 3px;
+    padding: 10px 0;
     background-color: #4a4a4a;
+    background-clip: content-box;
     border-radius: 1px;
     position: relative;
     cursor: pointer;
-    overflow: hidden;
 }
 
 .sc-progress-fill {
@@ -449,18 +450,11 @@ a:hover {
     border-radius: 1px;
     width: 0%;
     position: relative;
-    animation: sc-stream 3s ease-in-out infinite;
-}
-
-@keyframes sc-stream {
-    0%   { width: 15%; }
-    50%  { width: 55%; }
-    100% { width: 15%; }
+    transition: width 1s linear;
 }
 
 .sc-progress-bar:hover {
     height: 5px;
-    margin-top: -1px;
 }
 
 /* Volume */
@@ -482,6 +476,7 @@ a:hover {
     background-color: #4a4a4a;
     border-radius: 1px;
     overflow: hidden;
+    cursor: pointer;
 }
 
 .sc-volume-fill {
@@ -489,6 +484,7 @@ a:hover {
     width: 80%;
     background-color: #999;
     border-radius: 1px;
+    pointer-events: none;
 }
 
 /* Track info (right side) */

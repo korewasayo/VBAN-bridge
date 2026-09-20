@@ -138,6 +138,49 @@ async def stop_request(request: Request, request_id: int, user: dict = Depends(r
     await add_audit_log(user["id"], "stop_request", f"Stopped request {request_id}", ip)
     return {"status": "success"}
 
+@router.post("/admin/api/player/pause")
+async def pause_player(request: Request, user: dict = Depends(require_permission("manage_requests"))):
+    try:
+        from audio.player import player
+        is_paused = player.toggle_pause()
+        return {"status": "success", "is_paused": is_paused}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/admin/api/player/status")
+async def player_status(request: Request, user: dict = Depends(require_permission("manage_requests"))):
+    try:
+        from audio.player import player
+        return player.get_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/api/player/volume")
+async def set_player_volume(request: Request, data: dict, user: dict = Depends(require_permission("manage_requests"))):
+    volume = data.get("volume", 0.8)
+    try:
+        from audio.player import player
+        player.set_volume(float(volume))
+        return {"status": "success", "volume": player.volume}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/api/player/seek")
+async def seek_player(request: Request, data: dict, user: dict = Depends(require_permission("manage_requests"))):
+    time = data.get("time", 0.0)
+    try:
+        from audio.player import player
+        success = player.seek(float(time))
+        if not success:
+            raise HTTPException(status_code=400, detail="Could not seek to that time")
+        return {"status": "success", "time": time}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @router.delete("/admin/api/requests/{request_id}")
 async def delete_request(request: Request, request_id: int, user: dict = Depends(require_permission("manage_requests"))):
     req = await fetch_one("SELECT mp3_path FROM music_requests WHERE id = ?", (request_id,))
