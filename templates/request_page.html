@@ -7,72 +7,89 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="container">
-        <div class="card-header" style="border:none;">
-            <h2>VBAN Bridge 🎵 Music Requests</h2>
-            <div>
+    <div class="page-shell">
+        <header class="topbar">
+            <div class="brand-wrap">
+                <div class="brand-mark">V</div>
+                <div>
+                    <div class="brand-title">VBAN Bridge</div>
+                    <div class="brand-subtitle">Music Requests</div>
+                </div>
+            </div>
+
+            <div class="user-panel">
                 {% if user %}
-                    <span style="margin-right: 15px; color: var(--text-secondary);">Logged in as {{ user.username }}</span>
+                    <span class="user-badge">Logged in as {{ user.username }}</span>
                     <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
                 {% else %}
                     <a href="/login" class="btn btn-primary btn-sm">Login</a>
                 {% endif %}
             </div>
-        </div>
+        </header>
 
-        <div class="card">
-            <h3>Request a Song</h3>
-            <div class="tabs-nav mt-2">
-                <button class="tab-btn active" onclick="switchTab('text')">Text Request</button>
-                <button class="tab-btn" onclick="switchTab('upload')">Upload MP3</button>
-            </div>
+        <main class="container">
+            <section class="card hero-card">
+                <div class="hero-copy">
+                    <p class="eyebrow">Request Library</p>
+                    <h2>Pick a track for the room</h2>
+                </div>
+                <div class="tabs-nav mt-2">
+                    <button class="tab-btn active" onclick="switchTab('text')">Text Request</button>
+                    <button class="tab-btn" onclick="switchTab('upload')">Upload MP3</button>
+                </div>
+            </section>
 
-            <!-- Text Request Form -->
-            <div id="tab-text" class="tab-pane active">
-                <form id="text-request-form" onsubmit="submitTextRequest(event)">
-                    <div class="form-group">
-                        <label for="title">Song Title, Search Query, or Link</label>
-                        <input type="text" id="title" class="form-control" placeholder="e.g. Darude Sandstorm, or YouTube/Spotify/SoundCloud URL" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="artist">Artist (Optional)</label>
-                        <input type="text" id="artist" class="form-control">
-                    </div>
-                    <button type="submit" class="btn btn-primary">Submit Request</button>
-                </form>
-            </div>
+            <section class="card request-card">
+                <!-- Text Request Form -->
+                <div id="tab-text" class="tab-pane active">
+                    <form id="text-request-form" onsubmit="submitTextRequest(event)" class="request-form">
+                        <div class="form-group">
+                            <label for="title">Song Title, Search Query, or Link</label>
+                            <input type="text" id="title" class="form-control" placeholder="e.g. Darude Sandstorm, or YouTube/Spotify/SoundCloud URL" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="artist">Artist (Optional)</label>
+                            <input type="text" id="artist" class="form-control" placeholder="Artist name">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit Request</button>
+                    </form>
+                </div>
 
-            <!-- Upload Request Form -->
-            <div id="tab-upload" class="tab-pane">
-                <form id="upload-request-form" onsubmit="submitUploadRequest(event)">
-                    <div class="form-group">
-                        <label for="up_title">Song Title</label>
-                        <input type="text" id="up_title" class="form-control" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="up_artist">Artist (Optional)</label>
-                        <input type="text" id="up_artist" class="form-control">
-                    </div>
-                    
-                    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file_input').click()">
-                        <h1 style="font-size: 2rem;">📁</h1>
-                        <p>Drag & Drop an MP3 file here or click to browse</p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary);">(Max 50MB)</p>
-                        <input type="file" id="file_input" accept="audio/mpeg,audio/mp3,.mp3" onchange="handleFileSelect(event)">
-                        <div id="file-name-display" style="margin-top: 10px; font-weight: bold; color: var(--accent-green);"></div>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary" id="upload-btn" disabled>Upload & Request</button>
-                </form>
-            </div>
-        </div>
+                <!-- Upload Request Form -->
+                <div id="tab-upload" class="tab-pane">
+                    <form id="upload-request-form" onsubmit="submitUploadRequest(event)" class="request-form">
+                        <div class="form-group">
+                            <label for="up_title">Song Title</label>
+                            <input type="text" id="up_title" class="form-control" required placeholder="Track title">
+                        </div>
+                        <div class="form-group">
+                            <label for="up_artist">Artist (Optional)</label>
+                            <input type="text" id="up_artist" class="form-control" placeholder="Artist name">
+                        </div>
 
-        <div class="card">
-            <h3>Current Queue</h3>
-            <div class="queue-list mt-2" id="queue-list">
-                <p style="color: var(--text-secondary);">Loading queue...</p>
-            </div>
-        </div>
+                        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file_input').click()">
+                            <div class="drop-icon">📁</div>
+                            <p>Drag & Drop an MP3 file here or click to browse</p>
+                            <p class="drop-hint">(Max 50MB)</p>
+                            <input type="file" id="file_input" accept="audio/mpeg,audio/mp3,.mp3" onchange="handleFileSelect(event)">
+                            <div id="file-name-display" class="file-name-display"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="upload-btn" disabled>Upload & Request</button>
+                    </form>
+                </div>
+            </section>
+
+            <section class="card queue-card">
+                <div class="queue-header">
+                    <h3>Current Queue</h3>
+                    <span class="pill">Live</span>
+                </div>
+                <div class="queue-list mt-2" id="queue-list">
+                    <div class="queue-empty">Loading queue...</div>
+                </div>
+            </section>
+        </main>
     </div>
 
     <div id="toast-container"></div>

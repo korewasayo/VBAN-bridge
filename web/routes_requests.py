@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from audio.downloader import download_audio_task
 
 from security.rbac import require_auth, require_permission, get_current_user
-from security.file_validator import validate_mp3, save_mp3, quarantine_file
+from security.file_validator import validate_mp3, save_mp3, quarantine_file, extract_mp3_metadata, sanitize_metadata_value
 from database.db import fetch_all, fetch_one, execute_query
 from database.models import add_audit_log
 from config import MAX_UPLOAD_SIZE_BYTES
@@ -23,14 +23,16 @@ async def request_page(request: Request, user: dict = Depends(get_current_user))
     return templates.TemplateResponse("request_page.html", {"request": request, "user": user})
 
 @router.post("/api/requests/submit")
-async def submit_request(request: Request, background_tasks: BackgroundTasks, title: str = Form(...), artist: str = Form(""), user: dict = Depends(get_current_user)):
-    user_id = user["id"] if user else None
+async def submit_request(request: Request, background_tasks: BackgroundTasks, title: str = Form(...), artist: str = Form(""), user: dict = Depends(require_permission("submit_request"))):
+    safe_title = sanitize_metadata_value(title) or "Untitled Song"
+    safe_artist = sanitize_metadata_value(artist) or "Unknown Artist"
+    user_id = user["id"]
     request_id = await execute_query(
-        "INSERT INTO music_requests (user_id, title, artist, status, source_type) VALUES (?, ?, ?, 'pending', 'text_request')",
-        (user_id, title, artist)
+        "INSERT INTO music_requests (user_id, title, artist, duration_seconds, status, source_type) VALUES (?, ?, ?, 0, 'pending', 'text_request')",
+        (user_id, safe_title, safe_artist)
     )
     ip = get_client_ip(request)
-    await add_audit_log(user_id, "submit_request", f"Submitted text request: {title} by {artist}", ip)
+    await add_audit_log(user_id, "submit_request", f"Submitted text request: {safe_title} by {safe_artist}", ip)
     
     # Spawn background task to download the audio
     background_tasks.add_task(download_audio_task, title, request_id, user_id, ip)
@@ -38,7 +40,7 @@ async def submit_request(request: Request, background_tasks: BackgroundTasks, ti
     return {"status": "success", "request_id": request_id}
 
 @router.post("/api/requests/upload")
-async def upload_request(request: Request, title: str = Form(...), artist: str = Form(""), file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+async def upload_request(request: Request, title: str = Form(...), artist: str = Form(""), file: UploadFile = File(...), user: dict = Depends(require_permission("upload_media"))):
     file_data = await file.read()
     
     if len(file_data) > MAX_UPLOAD_SIZE_BYTES:
@@ -46,33 +48,43 @@ async def upload_request(request: Request, title: str = Form(...), artist: str =
         
     is_valid, error_msg = validate_mp3(file.filename, file_data)
     if is_valid:
+        safe_title = sanitize_metadata_value(title) or "Untitled Song"
+        safe_artist = sanitize_metadata_value(artist) or "Unknown Artist"
+
         saved_path, save_error = save_mp3(file_data, file.filename)
         if not saved_path:
             raise HTTPException(status_code=500, detail=save_error)
-        
-        user_id = user["id"] if user else None
+
+        metadata = extract_mp3_metadata(saved_path)
+        if not safe_title or safe_title == "Untitled Song":
+            safe_title = sanitize_metadata_value(metadata.get("title")) or "Untitled Song"
+        if not safe_artist or safe_artist == "Unknown Artist":
+            safe_artist = sanitize_metadata_value(metadata.get("artist")) or "Unknown Artist"
+        duration_seconds = float(metadata.get("duration", 0.0) or 0.0)
+
+        user_id = user["id"]
         request_id = await execute_query(
-            "INSERT INTO music_requests (user_id, title, artist, status, source_type, mp3_path) VALUES (?, ?, ?, 'pending', 'upload', ?)",
-            (user_id, title, artist, saved_path)
+            "INSERT INTO music_requests (user_id, title, artist, status, source_type, mp3_path, duration_seconds) VALUES (?, ?, ?, 'pending', 'upload', ?, ?)",
+            (user_id, safe_title, safe_artist, saved_path, duration_seconds)
         )
         ip = get_client_ip(request)
-        await add_audit_log(user_id, "submit_upload", f"Uploaded mp3 request: {title}", ip)
+        await add_audit_log(user_id, "submit_upload", f"Uploaded mp3 request: {safe_title} by {safe_artist}", ip)
         return {"status": "success", "request_id": request_id}
     else:
         quarantine_file(file_data, file.filename, error_msg)
         raise HTTPException(status_code=400, detail=error_msg)
 
 @router.get("/api/requests/queue")
-async def get_queue(user: dict = Depends(get_current_user)):
+async def get_queue(user: dict = Depends(require_permission("view_queue"))):
     requests = await fetch_all(
-        "SELECT id, title, artist, status, source_type, created_at FROM music_requests WHERE status IN ('pending', 'approved', 'playing') ORDER BY created_at ASC"
+        "SELECT id, title, artist, duration_seconds, status, source_type, created_at FROM music_requests WHERE status IN ('pending', 'approved', 'playing') ORDER BY created_at ASC"
     )
     return [dict(r) for r in requests]
 
 @router.get("/admin/api/requests")
 async def admin_get_requests(status: str = None, user: dict = Depends(require_permission("manage_requests"))):
     query = """
-        SELECT r.id, r.title, r.artist, r.status, r.source_type, r.created_at, r.mp3_path,
+        SELECT r.id, r.title, r.artist, r.status, r.source_type, r.created_at, r.mp3_path, r.duration_seconds,
                u.username as requested_by
         FROM music_requests r
         LEFT JOIN users u ON r.user_id = u.id

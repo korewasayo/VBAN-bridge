@@ -33,8 +33,26 @@ TABLES_SQL = [
         used_at TEXT,
         expires_at TEXT NOT NULL,
         is_used INTEGER NOT NULL DEFAULT 0,
+        purpose TEXT NOT NULL DEFAULT 'login',
+        allowed_role TEXT NOT NULL DEFAULT 'guest',
+        max_uses INTEGER NOT NULL DEFAULT 1,
+        used_count INTEGER NOT NULL DEFAULT 0,
+        per_ip_limit INTEGER NOT NULL DEFAULT 1,
+        per_user_agent_limit INTEGER NOT NULL DEFAULT 1,
+        quota_window_minutes INTEGER NOT NULL DEFAULT 60,
+        is_public INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (created_by) REFERENCES users(id),
         FOREIGN KEY (used_by) REFERENCES users(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS access_link_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        link_id INTEGER NOT NULL,
+        ip_address TEXT,
+        user_agent_hash TEXT,
+        used_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (link_id) REFERENCES access_links(id)
     );
     """,
     """
@@ -45,6 +63,7 @@ TABLES_SQL = [
         artist TEXT DEFAULT '',
         status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'playing', 'played')),
         mp3_path TEXT,
+        duration_seconds REAL NOT NULL DEFAULT 0,
         source_type TEXT NOT NULL DEFAULT 'text_request' CHECK(source_type IN ('upload', 'text_request')),
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         reviewed_by INTEGER,
@@ -85,6 +104,29 @@ async def init_db() -> None:
     """Initialize the database by creating all tables if they do not exist."""
     for sql in TABLES_SQL:
         await execute_query(sql)
+
+    # Migration for older databases that predate the stricter guest-link model.
+    for stmt in [
+        "ALTER TABLE access_links ADD COLUMN purpose TEXT NOT NULL DEFAULT 'login'",
+        "ALTER TABLE access_links ADD COLUMN allowed_role TEXT NOT NULL DEFAULT 'guest'",
+        "ALTER TABLE access_links ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE access_links ADD COLUMN used_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE access_links ADD COLUMN per_ip_limit INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE access_links ADD COLUMN per_user_agent_limit INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE access_links ADD COLUMN quota_window_minutes INTEGER NOT NULL DEFAULT 60",
+        "ALTER TABLE access_links ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0",
+    ]:
+        try:
+            await execute_query(stmt)
+        except Exception:
+            pass
+
+    try:
+        await execute_query(
+            "CREATE TABLE IF NOT EXISTS access_link_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, link_id INTEGER NOT NULL, ip_address TEXT, user_agent_hash TEXT, used_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (link_id) REFERENCES access_links(id))"
+        )
+    except Exception:
+        pass
 
 async def seed_super_admin(username: str, password_hash: str) -> None:
     """Seed the super admin user if not already present."""

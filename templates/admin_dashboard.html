@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VBAN Bridge - Admin Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=8">
+    <link rel="stylesheet" href="/static/css/style.css?v=10">
     <style>
         .dashboard-header {
             display: flex;
@@ -244,6 +244,7 @@
             <span class="sc-time" id="player-elapsed">0:00</span>
             <div class="sc-progress-bar">
                 <div class="sc-progress-fill" id="player-progress-fill"></div>
+                <div class="sc-progress-tooltip" id="player-progress-tooltip">0:00</div>
             </div>
         </div>
 
@@ -739,6 +740,7 @@
 
         // Progress bar
         const progressBar = document.querySelector('.sc-progress-bar');
+        const progressTooltip = document.getElementById('player-progress-tooltip');
         let isDraggingProgress = false;
 
         function updateProgressUI(e) {
@@ -754,20 +756,38 @@
             return p;
         }
 
+        progressBar.addEventListener('mousemove', (e) => {
+            if (!_playerDuration) return;
+            const rect = progressBar.getBoundingClientRect();
+            let p = (e.clientX - rect.left) / rect.width;
+            p = Math.max(0, Math.min(1, p));
+            progressTooltip.style.left = (p * 100) + '%';
+            progressTooltip.textContent = formatTime(Math.floor(p * _playerDuration));
+        });
+
         progressBar.addEventListener('mousedown', (e) => {
             isDraggingProgress = true;
+            progressBar.classList.add('dragging');
             updateProgressUI(e);
         });
 
         window.addEventListener('mousemove', (e) => {
             if (isDraggingProgress) {
                 updateProgressUI(e);
+                if (_playerDuration) {
+                    const rect = progressBar.getBoundingClientRect();
+                    let p = (e.clientX - rect.left) / rect.width;
+                    p = Math.max(0, Math.min(1, p));
+                    progressTooltip.style.left = (p * 100) + '%';
+                    progressTooltip.textContent = formatTime(Math.floor(p * _playerDuration));
+                }
             }
         });
 
         window.addEventListener('mouseup', async (e) => {
             if (isDraggingProgress) {
                 isDraggingProgress = false;
+                progressBar.classList.remove('dragging');
                 if (!_playerDuration) return;
                 let p = updateProgressUI(e);
                 try {

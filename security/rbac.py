@@ -5,29 +5,33 @@ from typing import Optional
 
 # Role hierarchy: higher roles inherit lower role permissions
 ROLE_HIERARCHY = {
-    "super_admin": 4,
-    "admin": 3,
-    "moderator": 2,
-    "user": 1,
+    "super_admin": 5,
+    "admin": 4,
+    "moderator": 3,
+    "user": 2,
+    "guest": 1,
 }
 
 PERMISSIONS = {
     "super_admin": [
-        "manage_requests", "manage_channels", "manage_users", 
+        "manage_requests", "manage_channels", "manage_users",
         "manage_roles", "generate_links", "view_dashboard",
-        "submit_request", "view_queue", "manage_system"
+        "submit_request", "upload_media", "view_queue", "manage_system"
     ],
     "admin": [
         "manage_requests", "manage_channels", "manage_users",
         "generate_links", "view_dashboard",
-        "submit_request", "view_queue"
+        "submit_request", "upload_media", "view_queue"
     ],
     "moderator": [
         "manage_requests", "view_dashboard",
-        "submit_request", "view_queue"
+        "submit_request", "upload_media", "view_queue"
     ],
     "user": [
-        "submit_request", "view_queue"
+        "submit_request", "upload_media", "view_queue"
+    ],
+    "guest": [
+        "submit_request", "upload_media", "view_queue"
     ],
 }
 

@@ -6,12 +6,16 @@ Defense-in-depth approach:
 3. Magic bytes check - must start with MPEG audio frame headers or ID3 tags
 4. MIME type check via python-magic
 5. Embedded executable scan - check for PE/ELF/script headers in file body
+6. Metadata sanitization - keep only safe title/artist/duration fields for display
 """
+import json
 import os
 import secrets
 import shutil
 import re
-from typing import Tuple, Optional
+import subprocess
+from html import escape
+from typing import Tuple, Optional, Dict
 from config import MAX_UPLOAD_SIZE_BYTES, UPLOAD_DIR, QUARANTINE_DIR, ALLOWED_EXTENSIONS
 
 # MP3 magic bytes
@@ -33,6 +37,67 @@ DANGEROUS_SIGNATURES = [
     b'PK\x03\x04',  # ZIP archive (could contain malware)
     b'\xca\xfe\xba\xbe',  # Java class / Mach-O fat binary
 ]
+
+
+def sanitize_metadata_value(value: object, max_length: int = 200) -> str:
+    """Normalize metadata for safe display in the UI and database storage."""
+    if value is None:
+        return ""
+    cleaned = str(value).strip()
+    cleaned = cleaned.replace('\x00', '')
+    cleaned = cleaned.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = escape(cleaned, quote=False)
+    return cleaned[:max_length].strip()
+
+
+def format_duration_seconds(total_seconds: float) -> str:
+    """Pretty-format a duration in MM:SS."""
+    try:
+        total_seconds = max(0.0, float(total_seconds))
+    except (TypeError, ValueError):
+        return '0:00'
+    minutes = int(total_seconds // 60)
+    seconds = int(total_seconds % 60)
+    return f"{minutes}:{seconds:02d}"
+
+
+def extract_mp3_metadata(file_path: str) -> Dict[str, object]:
+    """Safely read MP3 metadata using ffprobe without executing embedded content."""
+    if not file_path or not os.path.exists(file_path):
+        return {'title': '', 'artist': '', 'duration': 0.0}
+
+    try:
+        cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format_tags=title,artist,album_artist:stream_tags=title,artist,album_artist:format=duration',
+            '-of', 'json',
+            file_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode != 0 or not result.stdout.strip():
+            return {'title': '', 'artist': '', 'duration': 0.0}
+
+        info = json.loads(result.stdout)
+        format_tags = info.get('format', {}).get('tags', {}) or {}
+        stream_tags = {}
+        for stream in info.get('streams', []):
+            if stream.get('tags'):
+                stream_tags = stream.get('tags', {})
+                break
+
+        title = format_tags.get('title') or stream_tags.get('title') or ''
+        artist = format_tags.get('artist') or format_tags.get('album_artist') or stream_tags.get('artist') or stream_tags.get('album_artist') or ''
+        duration = info.get('format', {}).get('duration') or (info.get('streams', [{}])[0].get('duration') if info.get('streams') else 0)
+
+        return {
+            'title': sanitize_metadata_value(title),
+            'artist': sanitize_metadata_value(artist) or 'Unknown Artist',
+            'duration': float(duration) if duration not in (None, '', 'N/A') else 0.0,
+        }
+    except Exception:
+        return {'title': '', 'artist': '', 'duration': 0.0}
 
 
 def validate_extension(filename: str) -> Tuple[bool, str]:
@@ -110,7 +175,6 @@ def validate_mp3(filename: str, file_data: bytes) -> Tuple[bool, str]:
     return True, ""
 
 
-import subprocess
 import tempfile
 
 def save_mp3(file_data: bytes, original_filename: str) -> Tuple[Optional[str], str]:

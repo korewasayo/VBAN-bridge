@@ -18,6 +18,10 @@ def get_client_ip(request: Request) -> str:
             request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or 
             request.client.host)
 
+
+def get_user_agent(request: Request) -> str:
+    return request.headers.get("User-Agent", "")
+
 @router.get("/")
 async def root_redirect():
     return RedirectResponse(url="/request", status_code=303)
@@ -25,22 +29,28 @@ async def root_redirect():
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, token: str = None):
     if token:
-        valid_link = await validate_and_consume_link(token)
+        valid_link = await validate_and_consume_link(
+            token,
+            purpose="login",
+            required_role="guest",
+            client_ip=get_client_ip(request),
+            user_agent=get_user_agent(request),
+        )
         if valid_link:
             guest_username = f"guest_{secrets.token_hex(4)}"
             user_id = await execute_query(
-                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'user')", 
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'guest')",
                 (guest_username, "")
             )
-            
+
             ip = get_client_ip(request)
             session_token = await generate_session_token(user_id, ip)
-            
+
             response = RedirectResponse(url="/request", status_code=303)
             response.set_cookie(key="session_token", value=session_token, httponly=True, secure=True, samesite="strict")
-            await add_audit_log(user_id, "user_login", "Logged in via access link", ip)
+            await add_audit_log(user_id, "guest_login", "Logged in via access link", ip)
             return response
-            
+
     return templates.TemplateResponse("login.html", {"request": request})
 
 @router.get("/admin/login", response_class=HTMLResponse)
@@ -64,22 +74,28 @@ async def admin_login(request: Request, username: str = Form(...), password: str
 
 @router.post("/login")
 async def legacy_login(request: Request, token: str = Form(...)):
-    valid_link = await validate_and_consume_link(token)
+    valid_link = await validate_and_consume_link(
+        token,
+        purpose="login",
+        required_role="guest",
+        client_ip=get_client_ip(request),
+        user_agent=get_user_agent(request),
+    )
     if valid_link:
         guest_username = f"guest_{secrets.token_hex(4)}"
         user_id = await execute_query(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'user')", 
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'guest')",
             (guest_username, "")
         )
-        
+
         ip = get_client_ip(request)
         session_token = await generate_session_token(user_id, ip)
-        
+
         response = RedirectResponse(url="/request", status_code=303)
         response.set_cookie(key="session_token", value=session_token, httponly=True, secure=True, samesite="strict")
-        await add_audit_log(user_id, "user_login", "Logged in via OTP form", ip)
+        await add_audit_log(user_id, "guest_login", "Logged in via OTP form", ip)
         return response
-        
+
     return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid or expired token"})
 
 @router.get("/logout")

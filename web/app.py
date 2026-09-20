@@ -44,14 +44,38 @@ def create_application(lifespan: Callable) -> FastAPI:
         return response
 
     @app.middleware("http")
-    async def security_headers_middleware(request: Request, call_next):
-        """Add security headers to all responses."""
+    async def csrf_and_origin_middleware(request: Request, call_next):
+        """Reject cross-site state-changing requests and add hardening headers."""
+        method = request.method.upper()
+        if method not in {"GET", "HEAD", "OPTIONS"}:
+            origin = request.headers.get("Origin")
+            referer = request.headers.get("Referer")
+            host = request.url.netloc
+            allowed_origin = True
+
+            if origin:
+                allowed_origin = origin.rstrip("/") in {f"http://{host}", f"https://{host}"}
+            elif referer:
+                try:
+                    from urllib.parse import urlparse
+                    referer_host = urlparse(referer).netloc
+                    allowed_origin = referer_host == host
+                except Exception:
+                    allowed_origin = False
+
+            if not allowed_origin:
+                return HTMLResponse("Forbidden: invalid origin.", status_code=403)
+
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        # 6. Content Security Policy (CSP) Header
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Vary"] = "Origin, Referer"
         csp = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
