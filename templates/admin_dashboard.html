@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VBAN Bridge - Admin Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=10">
+    <link rel="stylesheet" href="/static/css/style.css?v=12">
     <style>
         .dashboard-header {
             display: flex;
@@ -118,7 +118,7 @@
             <h3>Access Links</h3>
             <div class="card" style="background-color: var(--bg-element); margin-top:15px;">
                 <h4>Generate New Links</h4>
-                <form id="generate-links-form" onsubmit="generateLinks(event)" class="flex-row" style="align-items: flex-end;">
+                <form id="generate-links-form" onsubmit="generateLinks(event)" class="flex-row" style="align-items: flex-end; flex-wrap: wrap; gap: 14px;">
                     <div class="form-group" style="margin-bottom:0;">
                         <label>Count</label>
                         <input type="number" id="link_count" class="form-control" value="1" min="1" max="50" style="width: 100px;">
@@ -131,6 +131,33 @@
                             <option value="168">7 Days</option>
                             <option value="0">Never</option>
                         </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Purpose</label>
+                        <select id="link_purpose" class="form-control" style="width: 130px;">
+                            <option value="upload">Upload</option>
+                            <option value="login">Login</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Max Uses</label>
+                        <input type="number" id="link_max_uses" class="form-control" value="1" min="1" max="1000" style="width: 90px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Per User</label>
+                        <input type="number" id="link_per_user_limit" class="form-control" value="1" min="1" max="1000" style="width: 90px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Cooldown</label>
+                        <input type="number" id="link_cooldown" class="form-control" value="0" min="0" max="1440" style="width: 90px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Max / Window</label>
+                        <input type="number" id="link_max_uploads" class="form-control" value="1" min="1" max="1000" style="width: 90px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Window (min)</label>
+                        <input type="number" id="link_window" class="form-control" value="60" min="1" max="10080" style="width: 90px;">
                     </div>
                     <button type="submit" class="btn btn-success">Generate</button>
                 </form>
@@ -459,10 +486,17 @@
                     <tr>
                         <td><code style="background: var(--bg-main); padding: 2px 6px; border-radius: 4px;">${item.token}</code></td>
                         <td><span class="badge ${getBadgeClass(item.status)}">${item.status}</span></td>
-                        <td>${item.created_by_name || 'System'}</td>
+                        <td>${item.created_by || 'System'}</td>
                         <td>${new Date(item.created_at).toLocaleString()}</td>
                         <td>${item.used_at ? new Date(item.used_at).toLocaleString() : '-'}</td>
-                        <td>${item.status === 'active' ? `<button class="btn btn-warning btn-sm" onclick="revokeLink('${item.id}')">Revoke</button>` : ''}</td>
+                        <td>
+                            <div style="display:flex; flex-direction:column; gap:4px;">
+                                <small>${item.purpose || 'login'} · max ${item.max_uses || 1}</small>
+                                <small>user ${item.per_user_limit || 1} · cooldown ${item.cooldown_minutes || 0}m</small>
+                                <small>${item.max_uploads_per_window || 1}/${item.upload_window_minutes || 60}m</small>
+                                ${item.status === 'active' ? `<button class="btn btn-warning btn-sm" onclick="revokeLink('${item.id}')">Revoke</button>` : ''}
+                            </div>
+                        </td>
                     </tr>
                 `).join('');
             } catch (e) { console.error(e); }
@@ -472,8 +506,27 @@
             e.preventDefault();
             const count = document.getElementById('link_count').value;
             const hours = document.getElementById('link_expiry').value;
+            const purpose = document.getElementById('link_purpose').value;
+            const maxUses = document.getElementById('link_max_uses').value;
+            const perUserLimit = document.getElementById('link_per_user_limit').value;
+            const cooldownMinutes = document.getElementById('link_cooldown').value;
+            const maxUploads = document.getElementById('link_max_uploads').value;
+            const windowMinutes = document.getElementById('link_window').value;
             try {
-                const res = await fetchAPI('/admin/api/links/generate', 'POST', { count: parseInt(count), expiry_minutes: parseInt(hours) * 60 });
+                const res = await fetchAPI('/admin/api/links/generate', 'POST', {
+                    count: parseInt(count),
+                    expiry_minutes: parseInt(hours) * 60,
+                    purpose,
+                    max_uses: parseInt(maxUses),
+                    per_user_limit: parseInt(perUserLimit),
+                    cooldown_minutes: parseInt(cooldownMinutes),
+                    max_uploads_per_window: parseInt(maxUploads),
+                    upload_window_minutes: parseInt(windowMinutes),
+                    per_ip_limit: 1,
+                    per_user_agent_limit: 1,
+                    quota_window_minutes: parseInt(windowMinutes),
+                    is_public: true
+                });
                 const resultDiv = document.getElementById('generated-links-result');
                 resultDiv.style.display = 'block';
                 resultDiv.innerHTML = res.urls.map(url => `<div><a href="${url}" target="_blank" style="color: inherit;">${url}</a></div>`).join('');

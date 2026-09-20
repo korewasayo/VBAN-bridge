@@ -2,7 +2,7 @@
 
 Handles VBAN audio routing configuration: add, toggle, delete routes.
 """
-from fastapi import APIRouter, Request, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse
 from security.rbac import require_auth
 import vban_engine

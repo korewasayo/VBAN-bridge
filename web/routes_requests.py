@@ -4,8 +4,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from audio.downloader import download_audio_task
 
-from security.rbac import require_auth, require_permission, get_current_user
+from security.rbac import require_permission, get_current_user
 from security.file_validator import validate_mp3, save_mp3, quarantine_file, extract_mp3_metadata, sanitize_metadata_value
+from security.auth import can_user_upload_for_link
 from database.db import fetch_all, fetch_one, execute_query
 from database.models import add_audit_log
 from config import MAX_UPLOAD_SIZE_BYTES
@@ -45,7 +46,13 @@ async def upload_request(request: Request, title: str = Form(...), artist: str =
     
     if len(file_data) > MAX_UPLOAD_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="File too large")
-        
+
+    source_link_id = user.get("source_link_id")
+    if source_link_id:
+        can_upload, deny_reason = await can_user_upload_for_link(user["id"], int(source_link_id))
+        if not can_upload:
+            raise HTTPException(status_code=429, detail=deny_reason)
+
     is_valid, error_msg = validate_mp3(file.filename, file_data)
     if is_valid:
         safe_title = sanitize_metadata_value(title) or "Untitled Song"

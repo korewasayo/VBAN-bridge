@@ -16,12 +16,16 @@ def get_client_ip(request: Request) -> str:
 async def generate_links(request: Request, data: dict, user: dict = Depends(require_permission("generate_links"))):
     count = max(1, int(data.get("count", 1)))
     expiry_minutes = data.get("expiry_minutes")
-    purpose = (data.get("purpose") or "login").lower()
+    purpose = (data.get("purpose") or "upload").lower()
     allowed_role = (data.get("allowed_role") or "guest").lower()
     max_uses = max(1, int(data.get("max_uses", 1)))
     per_ip_limit = max(1, int(data.get("per_ip_limit", 1)))
     per_user_agent_limit = max(1, int(data.get("per_user_agent_limit", 1)))
+    per_user_limit = max(1, int(data.get("per_user_limit", 1)))
     quota_window_minutes = max(1, int(data.get("quota_window_minutes", 60)))
+    cooldown_minutes = max(0, int(data.get("cooldown_minutes", 0)))
+    max_uploads_per_window = max(1, int(data.get("max_uploads_per_window", 1)))
+    upload_window_minutes = max(1, int(data.get("upload_window_minutes", 60)))
     is_public = bool(data.get("is_public", True))
 
     urls = []
@@ -36,7 +40,11 @@ async def generate_links(request: Request, data: dict, user: dict = Depends(requ
             max_uses=max_uses,
             per_ip_limit=per_ip_limit,
             per_user_agent_limit=per_user_agent_limit,
+            per_user_limit=per_user_limit,
             quota_window_minutes=quota_window_minutes,
+            cooldown_minutes=cooldown_minutes,
+            max_uploads_per_window=max_uploads_per_window,
+            upload_window_minutes=upload_window_minutes,
             is_public=is_public,
         )
         urls.append(f"{base_url}login?token={token}")
@@ -51,7 +59,11 @@ async def generate_links(request: Request, data: dict, user: dict = Depends(requ
         "max_uses": max_uses,
         "per_ip_limit": per_ip_limit,
         "per_user_agent_limit": per_user_agent_limit,
+        "per_user_limit": per_user_limit,
         "quota_window_minutes": quota_window_minutes,
+        "cooldown_minutes": cooldown_minutes,
+        "max_uploads_per_window": max_uploads_per_window,
+        "upload_window_minutes": upload_window_minutes,
         "is_public": is_public,
     }
 

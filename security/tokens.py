@@ -56,7 +56,7 @@ async def get_session_user(token: str, ip: str = None) -> Optional[Dict]:
     Returns dict with id, username, role or None."""
     row = await fetch_one(
         """SELECT s.id as session_id, s.ip_address, s.expires_at,
-                  u.id as user_id, u.username, u.role, u.is_active
+                  u.id as user_id, u.username, u.role, u.is_active, u.source_link_id
            FROM sessions s
            JOIN users u ON s.user_id = u.id
            WHERE s.token = ?""",
@@ -90,7 +90,8 @@ async def get_session_user(token: str, ip: str = None) -> Optional[Dict]:
     return {
         "id": row["user_id"],
         "username": row["username"],
-        "role": row["role"]
+        "role": row["role"],
+        "source_link_id": row["source_link_id"]
     }
 
 
@@ -107,6 +108,6 @@ async def invalidate_all_user_sessions(user_id: int) -> None:
 async def cleanup_expired_sessions() -> int:
     """Remove all expired sessions from DB. Returns count removed."""
     await execute_query(
-        "DELETE FROM sessions WHERE expires_at < datetime('now')"
+        "DELETE FROM sessions WHERE datetime(expires_at) < datetime('now')"
     )
     return 0  # count not easily tracked

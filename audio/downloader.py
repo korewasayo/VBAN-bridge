@@ -3,6 +3,7 @@ import asyncio
 import logging
 import uuid
 import subprocess
+import sys
 from typing import Optional, Tuple
 import yt_dlp
 
@@ -58,7 +59,7 @@ def download_audio_sync(query: str) -> Tuple[str, str, str]:
         try:
             # We use subprocess to run spotdl module
             result = subprocess.run(
-                ["venv\\Scripts\\python", "-m", "spotdl", query, "--output", output_template_spotdl, "--format", "mp3"],
+                [sys.executable, "-m", "spotdl", query, "--output", output_template_spotdl, "--format", "mp3"],
                 capture_output=True,
                 text=True,
                 check=True

@@ -1,6 +1,6 @@
 import os
 import secrets
-from fastapi import APIRouter, Request, Form, Depends
+from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -39,8 +39,8 @@ async def login_page(request: Request, token: str = None):
         if valid_link:
             guest_username = f"guest_{secrets.token_hex(4)}"
             user_id = await execute_query(
-                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'guest')",
-                (guest_username, "")
+                "INSERT INTO users (username, password_hash, role, source_link_id) VALUES (?, ?, 'guest', ?)",
+                (guest_username, "", valid_link)
             )
 
             ip = get_client_ip(request)
@@ -84,8 +84,8 @@ async def legacy_login(request: Request, token: str = Form(...)):
     if valid_link:
         guest_username = f"guest_{secrets.token_hex(4)}"
         user_id = await execute_query(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'guest')",
-            (guest_username, "")
+            "INSERT INTO users (username, password_hash, role, source_link_id) VALUES (?, ?, 'guest', ?)",
+            (guest_username, "", valid_link)
         )
 
         ip = get_client_ip(request)

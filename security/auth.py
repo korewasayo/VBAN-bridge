@@ -19,10 +19,14 @@ async def generate_access_link(
     max_uses: int = 1,
     per_ip_limit: int = 1,
     per_user_agent_limit: int = 1,
+    per_user_limit: int = 1,
     quota_window_minutes: int = 60,
+    cooldown_minutes: int = 0,
+    max_uploads_per_window: int = 1,
+    upload_window_minutes: int = 60,
     is_public: bool = False,
 ) -> str:
-    """Generate a one-time access link token and store in DB."""
+    """Generate an access link token and store its policy in DB."""
     token = secrets.token_urlsafe(32)
     expiry = expiry_minutes or LINK_EXPIRY_MINUTES
     expires_at = (datetime.utcnow() + timedelta(minutes=expiry)).isoformat()
@@ -31,12 +35,16 @@ async def generate_access_link(
     max_uses = max(1, int(max_uses or 1))
     per_ip_limit = max(1, int(per_ip_limit or 1))
     per_user_agent_limit = max(1, int(per_user_agent_limit or 1))
+    per_user_limit = max(1, int(per_user_limit or 1))
     quota_window_minutes = max(1, int(quota_window_minutes or 60))
+    cooldown_minutes = max(0, int(cooldown_minutes or 0))
+    max_uploads_per_window = max(1, int(max_uploads_per_window or 1))
+    upload_window_minutes = max(1, int(upload_window_minutes or 60))
     is_public_flag = 1 if is_public else 0
 
     await execute_query(
-        "INSERT INTO access_links (token, created_by, expires_at, purpose, allowed_role, max_uses, per_ip_limit, per_user_agent_limit, quota_window_minutes, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (token, created_by_user_id, expires_at, purpose, allowed_role, max_uses, per_ip_limit, per_user_agent_limit, quota_window_minutes, is_public_flag),
+        "INSERT INTO access_links (token, created_by, expires_at, purpose, allowed_role, max_uses, per_ip_limit, per_user_agent_limit, per_user_limit, quota_window_minutes, cooldown_minutes, max_uploads_per_window, upload_window_minutes, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (token, created_by_user_id, expires_at, purpose, allowed_role, max_uses, per_ip_limit, per_user_agent_limit, per_user_limit, quota_window_minutes, cooldown_minutes, max_uploads_per_window, upload_window_minutes, is_public_flag),
     )
     return token
 
@@ -57,7 +65,7 @@ async def validate_and_consume_link(
 ) -> Optional[int]:
     """Validate a one-time access link and enforce purpose, role, and quota rules."""
     link = await fetch_one(
-        "SELECT id, is_used, expires_at, purpose, allowed_role, max_uses, used_count, per_ip_limit, per_user_agent_limit, quota_window_minutes FROM access_links WHERE token = ?",
+        "SELECT id, is_used, expires_at, purpose, allowed_role, max_uses, used_count, per_ip_limit, per_user_agent_limit, per_user_limit, quota_window_minutes, cooldown_minutes, max_uploads_per_window, upload_window_minutes FROM access_links WHERE token = ?",
         (token,),
     )
 
@@ -110,12 +118,68 @@ async def validate_and_consume_link(
     return link["id"]
 
 
+async def can_user_upload_for_link(user_id: int, link_id: int) -> tuple[bool, str]:
+    """Return (can_upload, reason). Enforces per-user limits and cooldown policy for an upload link."""
+    if not user_id or not link_id:
+        return False, "No upload link attached to this account."
+
+    link = await fetch_one(
+        "SELECT id, purpose, expires_at, max_uses, used_count, per_user_limit, cooldown_minutes, max_uploads_per_window, upload_window_minutes FROM access_links WHERE id = ?",
+        (link_id,),
+    )
+    if not link:
+        return False, "Upload link not found."
+
+    if link["purpose"] != "upload":
+        return False, "This link is not configured for uploads."
+
+    expires_at = datetime.fromisoformat(link["expires_at"])
+    if datetime.utcnow() > expires_at:
+        return False, "This upload link has expired."
+
+    if int(link["used_count"] or 0) >= int(link["max_uses"] or 1):
+        return False, "This link has reached its total usage limit."
+
+    per_user_limit = int(link["per_user_limit"] or 1)
+    if per_user_limit > 0:
+        user_upload_count = await fetch_one(
+            "SELECT COUNT(*) as c FROM music_requests WHERE user_id = ? AND source_type = 'upload' AND created_at >= datetime('now', '-' || ? || ' minutes')",
+            (user_id, int(link["upload_window_minutes"] or 60)),
+        )
+        if int((user_upload_count or {}).get("c", 0) or 0) >= per_user_limit:
+            return False, "This user has reached the maximum uploads allowed by this link."
+
+    if int(link["cooldown_minutes"] or 0) > 0:
+        recent_upload = await fetch_one(
+            "SELECT created_at FROM music_requests WHERE user_id = ? AND source_type = 'upload' ORDER BY created_at DESC LIMIT 1",
+            (user_id,),
+        )
+        if recent_upload and recent_upload["created_at"]:
+            last_upload = datetime.fromisoformat(recent_upload["created_at"])
+            if datetime.utcnow() - last_upload < timedelta(minutes=int(link["cooldown_minutes"])):
+                return False, f"You can upload again in {int(link['cooldown_minutes'])} minutes."
+
+    upload_window_minutes = int(link["upload_window_minutes"] or 60)
+    max_uploads_per_window = int(link["max_uploads_per_window"] or 1)
+    if max_uploads_per_window > 0:
+        recent_window_count = await fetch_one(
+            "SELECT COUNT(*) as c FROM music_requests WHERE user_id = ? AND source_type = 'upload' AND created_at >= datetime('now', '-' || ? || ' minutes')",
+            (user_id, upload_window_minutes),
+        )
+        if int((recent_window_count or {}).get("c", 0) or 0) >= max_uploads_per_window:
+            return False, f"You have reached the upload limit for this window ({max_uploads_per_window} in {upload_window_minutes} minutes)."
+
+    return True, ""
+
+
 async def get_all_links() -> List[Dict]:
     """Get all access links with their status for admin dashboard."""
     rows = await fetch_all(
         """SELECT al.id, al.token, al.is_used, al.created_at, al.used_at, al.expires_at,
                   al.purpose, al.allowed_role, al.max_uses, al.used_count,
-                  al.per_ip_limit, al.per_user_agent_limit, al.quota_window_minutes,
+                  al.per_ip_limit, al.per_user_agent_limit, al.per_user_limit,
+                  al.quota_window_minutes, al.cooldown_minutes,
+                  al.max_uploads_per_window, al.upload_window_minutes,
                   u.username as created_by_name
            FROM access_links al
            JOIN users u ON al.created_by = u.id
@@ -137,7 +201,11 @@ async def get_all_links() -> List[Dict]:
             "used_count": row["used_count"],
             "per_ip_limit": row["per_ip_limit"],
             "per_user_agent_limit": row["per_user_agent_limit"],
+            "per_user_limit": row["per_user_limit"],
             "quota_window_minutes": row["quota_window_minutes"],
+            "cooldown_minutes": row["cooldown_minutes"],
+            "max_uploads_per_window": row["max_uploads_per_window"],
+            "upload_window_minutes": row["upload_window_minutes"],
             "created_at": row["created_at"],
             "used_at": row["used_at"],
             "expires_at": row["expires_at"],

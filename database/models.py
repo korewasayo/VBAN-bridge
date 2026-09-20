@@ -7,9 +7,11 @@ TABLES_SQL = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('super_admin', 'admin', 'moderator', 'user')),
+        role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('super_admin', 'admin', 'moderator', 'user', 'guest')),
         is_active INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        source_link_id INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (source_link_id) REFERENCES access_links(id)
     );
     """,
     """
@@ -39,7 +41,11 @@ TABLES_SQL = [
         used_count INTEGER NOT NULL DEFAULT 0,
         per_ip_limit INTEGER NOT NULL DEFAULT 1,
         per_user_agent_limit INTEGER NOT NULL DEFAULT 1,
+        per_user_limit INTEGER NOT NULL DEFAULT 1,
         quota_window_minutes INTEGER NOT NULL DEFAULT 60,
+        cooldown_minutes INTEGER NOT NULL DEFAULT 0,
+        max_uploads_per_window INTEGER NOT NULL DEFAULT 1,
+        upload_window_minutes INTEGER NOT NULL DEFAULT 60,
         is_public INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (created_by) REFERENCES users(id),
         FOREIGN KEY (used_by) REFERENCES users(id)
@@ -113,8 +119,14 @@ async def init_db() -> None:
         "ALTER TABLE access_links ADD COLUMN used_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE access_links ADD COLUMN per_ip_limit INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE access_links ADD COLUMN per_user_agent_limit INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE access_links ADD COLUMN per_user_limit INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE access_links ADD COLUMN quota_window_minutes INTEGER NOT NULL DEFAULT 60",
+        "ALTER TABLE access_links ADD COLUMN cooldown_minutes INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE access_links ADD COLUMN max_uploads_per_window INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE access_links ADD COLUMN upload_window_minutes INTEGER NOT NULL DEFAULT 60",
         "ALTER TABLE access_links ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN source_link_id INTEGER",
+        "ALTER TABLE music_requests ADD COLUMN duration_seconds REAL NOT NULL DEFAULT 0",
     ]:
         try:
             await execute_query(stmt)

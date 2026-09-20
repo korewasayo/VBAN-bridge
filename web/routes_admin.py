@@ -74,4 +74,4 @@ async def get_audit_log(user: dict = Depends(require_role("admin", "super_admin"
         ORDER BY a.timestamp DESC 
         LIMIT 200
     ''')
-    return [dict(l) for l in logs]
+    return [dict(row) for row in logs]
