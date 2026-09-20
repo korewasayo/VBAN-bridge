@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VBAN Bridge - Admin Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=4">
     <style>
         .dashboard-header {
             display: flex;
@@ -226,12 +226,38 @@
     </div>
 
     <div id="player-bar" class="player-bar" style="display: none;">
-        <div class="player-info">
-            <div class="player-title" id="player-title">-</div>
-            <div class="player-artist" id="player-artist">-</div>
+        <!-- Transport controls -->
+        <div class="sc-controls">
+            <button class="sc-btn" id="player-stop-btn" title="Stop">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10" rx="1"/></svg>
+            </button>
         </div>
-        <div class="player-controls">
-            <button class="btn btn-secondary btn-sm" id="player-stop-btn">⏹️ Stop</button>
+
+        <!-- Progress section -->
+        <div class="sc-progress-section">
+            <span class="sc-time" id="player-elapsed">0:00</span>
+            <div class="sc-progress-bar">
+                <div class="sc-progress-fill" id="player-progress-fill"></div>
+            </div>
+        </div>
+
+        <!-- Volume -->
+        <div class="sc-volume">
+            <svg class="sc-volume-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M12.945 1.379l-.652.763c1.577 1.462 2.57 3.544 2.57 5.858s-.994 4.396-2.57 5.858l.651.763A8.966 8.966 0 0 0 16 8a8.966 8.966 0 0 0-3.055-6.621zM11.283 3.03l-.652.763A5.97 5.97 0 0 1 12.5 8a5.97 5.97 0 0 1-1.869 4.207l.652.763A6.964 6.964 0 0 0 13.5 8a6.964 6.964 0 0 0-2.217-4.97zM9.62 4.68l-.652.763A3.98 3.98 0 0 1 10 8a3.98 3.98 0 0 1-1.032 2.557l.652.763A4.975 4.975 0 0 0 11 8a4.975 4.975 0 0 0-1.38-3.32zM7 2L4 5H1v6h3l3 3V2z"/></svg>
+            <div class="sc-volume-bar">
+                <div class="sc-volume-fill"></div>
+            </div>
+        </div>
+
+        <!-- Track info -->
+        <div class="sc-track-info">
+            <div class="sc-art" id="player-art">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#999"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            </div>
+            <div class="sc-track-text">
+                <span class="sc-track-title" id="player-title">-</span>
+                <span class="sc-track-artist" id="player-artist">-</span>
+            </div>
         </div>
     </div>
 
@@ -529,16 +555,54 @@
             if (activeTab === 'tab-queue') fetchQueue();
         }, 5000);
 
+        // Player bar state
+        let _playerElapsedInterval = null;
+        let _playerElapsedSeconds = 0;
+        let _playerCurrentId = null;
+
+        function formatTime(totalSeconds) {
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            return m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
         function updatePlayerBar(item) {
             const bar = document.getElementById('player-bar');
             if (!item) {
                 bar.style.display = 'none';
+                if (_playerElapsedInterval) {
+                    clearInterval(_playerElapsedInterval);
+                    _playerElapsedInterval = null;
+                }
+                _playerCurrentId = null;
+                _playerElapsedSeconds = 0;
                 return;
             }
-            bar.style.display = 'flex';
-            document.getElementById('player-title').innerText = item.title || 'Unknown Title';
-            document.getElementById('player-artist').innerText = item.artist || 'Unknown Artist';
-            document.getElementById('player-stop-btn').onclick = () => updateReq(item.id, 'stop');
+
+            bar.style.display = '';
+
+            document.getElementById('player-title').textContent = item.title || 'Unknown Title';
+            document.getElementById('player-artist').textContent = item.artist || 'Unknown Artist';
+
+            // Wire up stop button
+            document.getElementById('player-stop-btn').onclick = function() {
+                updateReq(item.id, 'stop');
+            };
+
+            // Start elapsed timer only if track changed
+            if (_playerCurrentId !== item.id) {
+                _playerCurrentId = item.id;
+                _playerElapsedSeconds = 0;
+                document.getElementById('player-elapsed').textContent = '0:00';
+
+                if (_playerElapsedInterval) {
+                    clearInterval(_playerElapsedInterval);
+                }
+                _playerElapsedInterval = setInterval(function() {
+                    _playerElapsedSeconds++;
+                    document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
+                }, 1000);
+            }
         }
     </script>
 </body>

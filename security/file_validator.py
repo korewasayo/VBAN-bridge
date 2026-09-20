@@ -8,8 +8,9 @@ Defense-in-depth approach:
 5. Embedded executable scan - check for PE/ELF/script headers in file body
 """
 import os
-import uuid
+import secrets
 import shutil
+import re
 from typing import Tuple, Optional
 from config import MAX_UPLOAD_SIZE_BYTES, UPLOAD_DIR, QUARANTINE_DIR, ALLOWED_EXTENSIONS
 
@@ -109,28 +110,57 @@ def validate_mp3(filename: str, file_data: bytes) -> Tuple[bool, str]:
     return True, ""
 
 
+import subprocess
+import tempfile
+
 def save_mp3(file_data: bytes, original_filename: str) -> Tuple[Optional[str], str]:
-    """Save a validated MP3 file with a UUID filename.
+    """Save a validated MP3 file with a secure random filename.
+    Re-encodes the file to strip malicious metadata and payloads.
     Returns (saved_path, error_message).
     """
-    # Generate safe filename
-    file_id = uuid.uuid4().hex
-    safe_filename = f"{file_id}.mp3"
-    save_path = os.path.join(UPLOAD_DIR, safe_filename)
+    # Generate safe filename using cryptographic randomness (matches bin2hex(random_bytes(16)))
+    file_id = secrets.token_hex(16)
     
+    # Use hardcoded whitelist extension, do not use user input
+    safe_ext = 'mp3'
+    safe_filename = f"{file_id}.{safe_ext}"
+    
+    save_path = os.path.join(UPLOAD_DIR, safe_filename)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    
+    # Step 4: Audio Re-encoding (equivalent to Image Re-encoding)
+    # Write to a temporary file, run ffmpeg, and output to the final save_path
     try:
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        with open(save_path, 'wb') as f:
-            f.write(file_data)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_input:
+            temp_input.write(file_data)
+            temp_input_path = temp_input.name
+            
+        try:
+            subprocess.run([
+                "ffmpeg", "-y", "-i", temp_input_path, 
+                "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", 
+                "-map_metadata", "-1", # Strip all metadata
+                save_path
+            ], capture_output=True, check=True)
+        finally:
+            if os.path.exists(temp_input_path):
+                os.remove(temp_input_path)
+                
         return save_path, ""
+    except subprocess.CalledProcessError as e:
+        return None, f"Re-encoding failed. The file may be corrupt or malicious."
     except Exception as e:
         return None, f"Failed to save file: {str(e)}"
 
 
 def quarantine_file(file_data: bytes, original_filename: str, reason: str) -> str:
     """Move a suspicious file to quarantine for inspection."""
-    file_id = uuid.uuid4().hex
-    safe_filename = f"{file_id}_QUARANTINED_{original_filename.replace(os.sep, '_')}"
+    file_id = secrets.token_hex(16)
+    
+    # Strictly sanitize the original filename to avoid path traversal attacks
+    sanitized_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', os.path.basename(original_filename.replace('\\', '/')))
+    
+    safe_filename = f"{file_id}_QUARANTINED_{sanitized_name}"
     quarantine_path = os.path.join(QUARANTINE_DIR, safe_filename)
     
     os.makedirs(QUARANTINE_DIR, exist_ok=True)

@@ -51,6 +51,15 @@ def create_application(lifespan: Callable) -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # 6. Content Security Policy (CSP) Header
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self';"
+        )
+        response.headers["Content-Security-Policy"] = csp
         return response
 
     # --- STATIC FILES ---

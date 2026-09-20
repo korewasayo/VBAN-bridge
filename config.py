@@ -15,8 +15,10 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DATABASE_PATH = os.path.join(DATA_DIR, "vban_bridge.db")
 
 # --- FILE UPLOADS ---
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "mp3")
-QUARANTINE_DIR = os.path.join(BASE_DIR, "uploads", "quarantine")
+# Step 3: Storing files outside the server root to prevent direct web server access
+UPLOAD_BASE = os.environ.get("UPLOAD_BASE", os.path.abspath(os.path.join(BASE_DIR, "..", "vban_data_uploads")))
+UPLOAD_DIR = os.path.join(UPLOAD_BASE, "mp3")
+QUARANTINE_DIR = os.path.join(UPLOAD_BASE, "quarantine")
 MAX_UPLOAD_SIZE_MB = int(os.environ.get("MAX_UPLOAD_SIZE_MB", 50))
 MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ALLOWED_EXTENSIONS = {".mp3"}
