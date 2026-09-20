@@ -24,6 +24,7 @@ body {
     color: var(--text-primary);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
+    padding-bottom: 80px;
 }
 
 .container {
@@ -367,4 +368,41 @@ a:hover {
     0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.4); }
     70% { box-shadow: 0 0 0 6px rgba(33, 150, 243, 0); }
     100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+}
+
+/* Player Bar */
+.player-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 900;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
+}
+
+.player-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.player-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.player-artist {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.player-controls {
+    display: flex;
+    gap: 10px;
 }

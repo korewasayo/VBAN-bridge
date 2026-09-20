@@ -225,6 +225,16 @@
         </div>
     </div>
 
+    <div id="player-bar" class="player-bar" style="display: none;">
+        <div class="player-info">
+            <div class="player-title" id="player-title">-</div>
+            <div class="player-artist" id="player-artist">-</div>
+        </div>
+        <div class="player-controls">
+            <button class="btn btn-secondary btn-sm" id="player-stop-btn">⏹️ Stop</button>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <script>
@@ -290,10 +300,16 @@
                 const tbody = document.getElementById('queue-tbody');
                 if (!data || data.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="8" class="text-center">No requests found.</td></tr>';
+                    if (typeof updatePlayerBar === 'function') updatePlayerBar(null);
                     return;
                 }
                 
-                tbody.innerHTML = data.map((item, i) => `
+                let playingItem = null;
+                tbody.innerHTML = data.map((item, i) => {
+                    if ((item.status || '').toLowerCase() === 'playing') {
+                        playingItem = item;
+                    }
+                    return `
                     <tr>
                         <td>${item.id}</td>
                         <td><strong>${item.title || '-'}</strong></td>
@@ -304,7 +320,8 @@
                         <td>${new Date(item.created_at).toLocaleString()}</td>
                         <td>${getQueueActions(item)}</td>
                     </tr>
-                `).join('');
+                `}).join('');
+                if (typeof updatePlayerBar === 'function') updatePlayerBar(playingItem);
             } catch (e) {
                 console.error(e);
             }
@@ -511,6 +528,18 @@
             const activeTab = document.querySelector('.tab-pane.active').id;
             if (activeTab === 'tab-queue') fetchQueue();
         }, 5000);
+
+        function updatePlayerBar(item) {
+            const bar = document.getElementById('player-bar');
+            if (!item) {
+                bar.style.display = 'none';
+                return;
+            }
+            bar.style.display = 'flex';
+            document.getElementById('player-title').innerText = item.title || 'Unknown Title';
+            document.getElementById('player-artist').innerText = item.artist || 'Unknown Artist';
+            document.getElementById('player-stop-btn').onclick = () => updateReq(item.id, 'stop');
+        }
     </script>
 </body>
 </html>
