@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VBAN Bridge - Admin Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=7">
+    <link rel="stylesheet" href="/static/css/style.css?v=8">
     <style>
         .dashboard-header {
             display: flex;
@@ -581,19 +581,23 @@
                 
                 if (res.elapsed !== undefined) {
                     // Sync the client side elapsed time with the server
-                    _playerElapsedSeconds = Math.floor(res.elapsed);
-                    document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
-                    if (_playerDuration > 0) {
-                        let pct = (_playerElapsedSeconds / _playerDuration) * 100;
-                        if (pct > 100) pct = 100;
-                        document.getElementById('player-progress-fill').style.width = pct + '%';
+                    if (typeof isDraggingProgress === 'undefined' || !isDraggingProgress) {
+                        _playerElapsedSeconds = Math.floor(res.elapsed);
+                        document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
+                        if (_playerDuration > 0) {
+                            let pct = (_playerElapsedSeconds / _playerDuration) * 100;
+                            if (pct > 100) pct = 100;
+                            document.getElementById('player-progress-fill').style.width = pct + '%';
+                        }
                     }
                 }
                 
                 // Keep UI in sync with backend state
                 if (res.volume !== undefined) {
-                    const volumeFill = document.querySelector('.sc-volume-fill');
-                    volumeFill.style.width = (res.volume * 100) + '%';
+                    if (typeof isDraggingVolume === 'undefined' || !isDraggingVolume) {
+                        const volumeFill = document.querySelector('.sc-volume-fill');
+                        volumeFill.style.width = (res.volume * 100) + '%';
+                    }
                 }
                 
                 const pauseIcon = document.getElementById('pause-icon');
@@ -657,7 +661,7 @@
                 _playerStatusInterval = setInterval(fetchPlayerStatus, 5000); // Poll status every 5s
 
                 _playerElapsedInterval = setInterval(function() {
-                    if (!_isPausedState) {
+                    if (!_isPausedState && typeof isDraggingProgress !== 'undefined' && !isDraggingProgress) {
                         _playerElapsedSeconds++;
                         document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
                         
@@ -666,6 +670,10 @@
                             if (pct > 100) pct = 100;
                             document.getElementById('player-progress-fill').style.width = pct + '%';
                         }
+                    } else if (!_isPausedState && typeof isDraggingProgress === 'undefined') {
+                        // Fallback just in case
+                        _playerElapsedSeconds++;
+                        document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
                     }
                 }, 1000);
             }
@@ -691,24 +699,50 @@
             }
         });
 
+        // Volume bar
         const volumeBar = document.querySelector('.sc-volume-bar');
         const volumeFill = document.querySelector('.sc-volume-fill');
-        volumeBar.addEventListener('click', async (e) => {
+        
+        let isDraggingVolume = false;
+        
+        function updateVolumeUI(e) {
             const rect = volumeBar.getBoundingClientRect();
             let p = (e.clientX - rect.left) / rect.width;
             p = Math.max(0, Math.min(1, p));
             volumeFill.style.width = (p * 100) + '%';
-            try {
-                await fetchAPI('/admin/api/player/volume', 'POST', { volume: p });
-            } catch (err) {
-                console.error('Volume error', err);
-                showToast(err.message, 'error');
+            return p;
+        }
+        
+        volumeBar.addEventListener('mousedown', (e) => {
+            isDraggingVolume = true;
+            updateVolumeUI(e);
+        });
+        
+        window.addEventListener('mousemove', (e) => {
+            if (isDraggingVolume) {
+                updateVolumeUI(e);
+            }
+        });
+        
+        window.addEventListener('mouseup', async (e) => {
+            if (isDraggingVolume) {
+                isDraggingVolume = false;
+                let p = updateVolumeUI(e);
+                try {
+                    await fetchAPI('/admin/api/player/volume', 'POST', { volume: p });
+                } catch (err) {
+                    console.error('Volume error', err);
+                    showToast(err.message, 'error');
+                }
             }
         });
 
+        // Progress bar
         const progressBar = document.querySelector('.sc-progress-bar');
-        progressBar.addEventListener('click', async (e) => {
-            if (!_playerDuration) return;
+        let isDraggingProgress = false;
+
+        function updateProgressUI(e) {
+            if (!_playerDuration) return 0;
             const rect = progressBar.getBoundingClientRect();
             let p = (e.clientX - rect.left) / rect.width;
             p = Math.max(0, Math.min(1, p));
@@ -717,12 +751,31 @@
             document.getElementById('player-progress-fill').style.width = (p * 100) + '%';
             _playerElapsedSeconds = Math.floor(p * _playerDuration);
             document.getElementById('player-elapsed').textContent = formatTime(_playerElapsedSeconds);
-            
-            try {
-                await fetchAPI('/admin/api/player/seek', 'POST', { time: p * _playerDuration });
-            } catch (err) {
-                console.error('Seek error', err);
-                showToast(err.message, 'error');
+            return p;
+        }
+
+        progressBar.addEventListener('mousedown', (e) => {
+            isDraggingProgress = true;
+            updateProgressUI(e);
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isDraggingProgress) {
+                updateProgressUI(e);
+            }
+        });
+
+        window.addEventListener('mouseup', async (e) => {
+            if (isDraggingProgress) {
+                isDraggingProgress = false;
+                if (!_playerDuration) return;
+                let p = updateProgressUI(e);
+                try {
+                    await fetchAPI('/admin/api/player/seek', 'POST', { time: p * _playerDuration });
+                } catch (err) {
+                    console.error('Seek error', err);
+                    showToast(err.message, 'error');
+                }
             }
         });
     </script>

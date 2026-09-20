@@ -76,7 +76,9 @@ class AudioPlayer:
                 if self._volume != 1.0:
                     try:
                         import audioop
-                        pcm_data = audioop.mul(pcm_data, 2, self._volume)
+                        # Use a simple audio taper (x^2) so the volume slider feels natural
+                        factor = self._volume ** 2
+                        pcm_data = audioop.mul(pcm_data, 2, factor)
                     except ImportError:
                         pass
                 
