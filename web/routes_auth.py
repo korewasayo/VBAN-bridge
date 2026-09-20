@@ -37,7 +37,7 @@ async def login_page(request: Request, token: str = None):
             session_token = await generate_session_token(user_id, ip)
             
             response = RedirectResponse(url="/request", status_code=303)
-            response.set_cookie(key="session_token", value=session_token, httponly=True, samesite="strict")
+            response.set_cookie(key="session_token", value=session_token, httponly=True, secure=True, samesite="strict")
             await add_audit_log(user_id, "user_login", "Logged in via access link", ip)
             return response
             
@@ -55,7 +55,7 @@ async def admin_login(request: Request, username: str = Form(...), password: str
     if user and user["is_active"] and verify_password(password, user["password_hash"]):
         session_token = await generate_session_token(user["id"], ip)
         response = RedirectResponse(url="/admin/dashboard", status_code=303)
-        response.set_cookie(key="session_token", value=session_token, httponly=True, samesite="strict")
+        response.set_cookie(key="session_token", value=session_token, httponly=True, secure=True, samesite="strict")
         await add_audit_log(user["id"], "admin_login", "Admin login successful", ip)
         return response
     
@@ -76,7 +76,7 @@ async def legacy_login(request: Request, token: str = Form(...)):
         session_token = await generate_session_token(user_id, ip)
         
         response = RedirectResponse(url="/request", status_code=303)
-        response.set_cookie(key="session_token", value=session_token, httponly=True, samesite="strict")
+        response.set_cookie(key="session_token", value=session_token, httponly=True, secure=True, samesite="strict")
         await add_audit_log(user_id, "user_login", "Logged in via OTP form", ip)
         return response
         
@@ -89,5 +89,5 @@ async def logout(request: Request):
         await invalidate_token(token)
     
     response = RedirectResponse(url="/request", status_code=303)
-    response.delete_cookie("session_token")
+    response.delete_cookie("session_token", secure=True, httponly=True)
     return response

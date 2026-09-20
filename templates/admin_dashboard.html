@@ -424,7 +424,7 @@
                 }
                 tbody.innerHTML = data.map(item => `
                     <tr>
-                        <td><code style="background: var(--bg-main); padding: 2px 6px; border-radius: 4px;">${item.token.substring(0,8)}...</code></td>
+                        <td><code style="background: var(--bg-main); padding: 2px 6px; border-radius: 4px;">${item.token}</code></td>
                         <td><span class="badge ${getBadgeClass(item.status)}">${item.status}</span></td>
                         <td>${item.created_by_name || 'System'}</td>
                         <td>${new Date(item.created_at).toLocaleString()}</td>

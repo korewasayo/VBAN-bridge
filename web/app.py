@@ -27,6 +27,9 @@ def create_application(lifespan: Callable) -> FastAPI:
     app = FastAPI(
         title="VBAN-Bridge — Music Request System",
         lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
     )
 
     # --- MIDDLEWARE ---
