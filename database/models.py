@@ -62,6 +62,42 @@ TABLES_SQL = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS invite_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        created_by INTEGER NOT NULL,
+        role TEXT NOT NULL DEFAULT 'guest',
+        expires_at TEXT NOT NULL,
+        max_uses INTEGER NOT NULL DEFAULT 1,
+        used_count INTEGER NOT NULL DEFAULT 0,
+        allow_uploads INTEGER NOT NULL DEFAULT 1,
+        allow_urls INTEGER NOT NULL DEFAULT 1,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS access_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        ip_address TEXT,
+        reason TEXT NOT NULL DEFAULT 'invalid_access',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_bans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        ip_address TEXT,
+        reason TEXT NOT NULL DEFAULT 'security_violation',
+        banned_until TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS music_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -138,6 +174,17 @@ async def init_db() -> None:
             "CREATE TABLE IF NOT EXISTS access_link_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, link_id INTEGER NOT NULL, ip_address TEXT, user_agent_hash TEXT, used_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (link_id) REFERENCES access_links(id))"
         )
     except Exception:
+        pass
+
+    for stmt in [
+        "CREATE TABLE IF NOT EXISTS invite_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE NOT NULL, created_by INTEGER NOT NULL, role TEXT NOT NULL DEFAULT 'guest', expires_at TEXT NOT NULL, max_uses INTEGER NOT NULL DEFAULT 1, used_count INTEGER NOT NULL DEFAULT 0, allow_uploads INTEGER NOT NULL DEFAULT 1, allow_urls INTEGER NOT NULL DEFAULT 1, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (created_by) REFERENCES users(id))",
+        "CREATE TABLE IF NOT EXISTS access_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, ip_address TEXT, reason TEXT NOT NULL DEFAULT 'invalid_access', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+        "CREATE TABLE IF NOT EXISTS user_bans (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, ip_address TEXT, reason TEXT NOT NULL DEFAULT 'security_violation', banned_until TEXT, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')) )"
+    ]:
+        try:
+            await execute_query(stmt)
+        except Exception:
+            pass
         pass
 
 async def seed_super_admin(username: str, password_hash: str) -> None:

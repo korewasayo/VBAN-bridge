@@ -7,6 +7,7 @@ from security.rbac import require_role, require_permission, require_auth
 from database.db import fetch_all, fetch_one, execute_query
 from database.models import add_audit_log
 from security.passwords import hash_password
+from security.auth import create_manual_ban, generate_invite_code, validate_invite_code
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates"))
@@ -75,3 +76,65 @@ async def get_audit_log(user: dict = Depends(require_role("admin", "super_admin"
         LIMIT 200
     ''')
     return [dict(row) for row in logs]
+
+@router.get("/admin/api/bans")
+async def get_bans(user: dict = Depends(require_role("admin", "super_admin"))):
+    bans = await fetch_all('''
+        SELECT b.id, b.user_id, u.username, b.ip_address, b.reason, b.banned_until, b.is_active, b.created_at
+        FROM user_bans b
+        LEFT JOIN users u ON b.user_id = u.id
+        ORDER BY b.created_at DESC
+        LIMIT 200
+    ''')
+    return [dict(row) for row in bans]
+
+@router.post("/admin/api/invite-codes/generate")
+async def generate_codes(request: Request, data: dict, user: dict = Depends(require_role("admin", "super_admin"))):
+    code = data.get("code")
+    role = (data.get("role") or "guest").lower()
+    expires_minutes = max(1, int(data.get("expires_minutes", 60)))
+    max_uses = max(1, int(data.get("max_uses", 1)))
+    allow_uploads = bool(data.get("allow_uploads", True))
+    allow_urls = bool(data.get("allow_urls", True))
+
+    generated = await generate_invite_code(
+        created_by_user_id=user["id"],
+        code=code,
+        role=role,
+        expires_minutes=expires_minutes,
+        max_uses=max_uses,
+        allow_uploads=allow_uploads,
+        allow_urls=allow_urls,
+    )
+
+    ip = get_client_ip(request)
+    await add_audit_log(user["id"], "generate_invite_code", f"Generated invite code {generated}", ip)
+    return {"status": "success", "code": generated, "role": role, "expires_minutes": expires_minutes, "max_uses": max_uses}
+
+@router.get("/admin/api/invite-codes")
+async def get_invite_codes(user: dict = Depends(require_role("admin", "super_admin"))):
+    rows = await fetch_all("SELECT id, code, role, expires_at, max_uses, used_count, allow_uploads, allow_urls, is_active, created_at FROM invite_codes ORDER BY created_at DESC LIMIT 100")
+    return [dict(row) for row in rows]
+
+@router.post("/admin/api/invite-codes/{code}/validate")
+async def validate_code_endpoint(request: Request, code: str, user: dict = Depends(require_role("admin", "super_admin"))):
+    result = await validate_invite_code(code, required_role="guest")
+    return {"valid": result is not None, "code": result["code"] if result else None}
+
+@router.post("/admin/api/users/{user_id}/ban")
+async def ban_user(request: Request, user_id: int, data: dict, user: dict = Depends(require_role("admin", "super_admin"))):
+    reason = data.get("reason", "manual_ban")
+    minutes = max(1, int(data.get("minutes", 60)))
+    ban = await create_manual_ban(user_id=user_id, reason=reason, minutes=minutes)
+    ip = get_client_ip(request)
+    await add_audit_log(user["id"], "ban_user", f"Banned user {user_id} for {minutes} minutes: {reason}", ip)
+    return {"status": "success", "ban": ban}
+
+@router.post("/admin/api/ip/{ip_address}/ban")
+async def ban_ip(request: Request, ip_address: str, data: dict, user: dict = Depends(require_role("admin", "super_admin"))):
+    reason = data.get("reason", "manual_ip_ban")
+    minutes = max(1, int(data.get("minutes", 60)))
+    ban = await create_manual_ban(ip_address=ip_address, reason=reason, minutes=minutes)
+    ip = get_client_ip(request)
+    await add_audit_log(user["id"], "ban_ip", f"Banned IP {ip_address} for {minutes} minutes: {reason}", ip)
+    return {"status": "success", "ban": ban}

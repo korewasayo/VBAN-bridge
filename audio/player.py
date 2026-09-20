@@ -82,23 +82,31 @@ class AudioPlayer:
                     except ImportError:
                         pass
                 
-                # Header for 48000 Hz (index 3), 256 samples, 2 channels, 16-bit
-                header = struct.pack('<4sBBBB16sI',
-                    b'VBAN', 3, 255, 1, 1, stream_name, frame_counter
-                )
-                packet = header + pcm_data
-                
-                # Fetch all unique active destination IPs from vban_engine
+                # Fetch all active routes to determine destinations and stream names
                 routes = vban_engine.get_routes()
-                dest_ips = set()
-                for route_list in routes.values():
+                active_destinations = [] # list of (dest_ip, stream_name)
+                for route_key, route_list in routes.items():
+                    try:
+                        _, stream_name_str = route_key.split("::", 1)
+                    except ValueError:
+                        continue
                     for dest in route_list:
                         if dest.get("active"):
-                            dest_ips.add(dest["dest_ip"])
+                            active_destinations.append((dest["dest_ip"], stream_name_str))
                 
-                # Send packet to all active destinations
-                for dest_ip in dest_ips:
+                # Default to CableAS1 to 127.0.0.1 if no routes configured
+                if not active_destinations:
+                    active_destinations.append(("127.0.0.1", "CableAS1"))
+                
+                # Send packet to all active destinations with their respective stream names
+                for dest_ip, stream_name_str in set(active_destinations):
                     try:
+                        # Rebuild header for each stream name
+                        s_name_bytes = stream_name_str.encode('ascii')[:16].ljust(16, b'\x00')
+                        header = struct.pack('<4sBBBB16sI',
+                            b'VBAN', 3, 255, 1, 1, s_name_bytes, frame_counter
+                        )
+                        packet = header + pcm_data
                         sock.sendto(packet, (dest_ip, 6980))
                     except Exception:
                         pass

@@ -6,7 +6,7 @@ from audio.downloader import download_audio_task
 
 from security.rbac import require_permission, get_current_user
 from security.file_validator import validate_mp3, save_mp3, quarantine_file, extract_mp3_metadata, sanitize_metadata_value
-from security.auth import can_user_upload_for_link
+from security.auth import can_user_upload_for_link, get_ban_status
 from database.db import fetch_all, fetch_one, execute_query
 from database.models import add_audit_log
 from config import MAX_UPLOAD_SIZE_BYTES
@@ -43,7 +43,11 @@ async def submit_request(request: Request, background_tasks: BackgroundTasks, ti
 @router.post("/api/requests/upload")
 async def upload_request(request: Request, title: str = Form(...), artist: str = Form(""), file: UploadFile = File(...), user: dict = Depends(require_permission("upload_media"))):
     file_data = await file.read()
-    
+    ip = get_client_ip(request)
+    ban = await get_ban_status(user_id=user["id"], ip_address=ip)
+    if ban:
+        raise HTTPException(status_code=403, detail=f"Access blocked: {ban['reason']}")
+
     if len(file_data) > MAX_UPLOAD_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="File too large")
 

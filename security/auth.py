@@ -49,6 +49,70 @@ async def generate_access_link(
     return token
 
 
+async def generate_invite_code(
+    created_by_user_id: int,
+    code: str = None,
+    role: str = "guest",
+    expires_minutes: int = 60,
+    max_uses: int = 1,
+    allow_uploads: bool = True,
+    allow_urls: bool = True,
+) -> str:
+    """Create a reusable access code that grants a role and limited usage."""
+    code_value = (code or secrets.token_urlsafe(8)).strip().upper().replace(" ", "-")
+    code_value = code_value[:32]
+    if not code_value:
+        code_value = f"ACCESS-{secrets.token_hex(4).upper()}"
+
+    expires_at = (datetime.utcnow() + timedelta(minutes=max(1, int(expires_minutes or 60)))).isoformat()
+    role_name = (role or "guest").strip().lower()
+    max_uses = max(1, int(max_uses or 1))
+
+    await execute_query(
+        "INSERT INTO invite_codes (code, created_by, role, expires_at, max_uses, allow_uploads, allow_urls, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+        (code_value, created_by_user_id, role_name, expires_at, max_uses, 1 if allow_uploads else 0, 1 if allow_urls else 0),
+    )
+    return code_value
+
+
+async def validate_invite_code(
+    code: str,
+    required_role: str = "guest",
+    client_ip: str = None,
+    user_agent: str = None,
+) -> Optional[Dict]:
+    """Validate a generated invite code and enforce expiry and usage limits."""
+    if not code:
+        return None
+
+    row = await fetch_one(
+        "SELECT id, code, role, expires_at, max_uses, used_count, allow_uploads, allow_urls, is_active FROM invite_codes WHERE code = ?",
+        (str(code).strip().upper(),),
+    )
+    if not row or int(row["is_active"] or 0) != 1:
+        return None
+    if required_role and row["role"] and row["role"] != required_role:
+        return None
+    if datetime.utcnow() > datetime.fromisoformat(row["expires_at"]):
+        return None
+    if int(row["used_count"] or 0) >= int(row["max_uses"] or 1):
+        return None
+
+    await execute_query(
+        "UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?",
+        (row["id"],),
+    )
+
+    return {
+        "id": row["id"],
+        "code": row["code"],
+        "role": row["role"],
+        "allow_uploads": bool(int(row["allow_uploads"] or 0)),
+        "allow_urls": bool(int(row["allow_urls"] or 0)),
+        "used_count": int(row["used_count"] or 0) + 1,
+    }
+
+
 def fingerprint_user_agent(user_agent: str) -> str:
     """Create a stable browser fingerprint for quota limiting without storing raw user-agent data."""
     if not user_agent:
@@ -221,3 +285,53 @@ async def revoke_link(link_id: int) -> bool:
         (link_id,),
     )
     return True
+
+
+async def get_ban_status(user_id: int = None, ip_address: str = None) -> Optional[Dict]:
+    """Return active ban info if the user or IP is currently banned."""
+    if user_id:
+        row = await fetch_one(
+            "SELECT id, user_id, ip_address, reason, banned_until, is_active FROM user_bans WHERE user_id = ? AND is_active = 1 AND (banned_until IS NULL OR datetime(banned_until) > datetime('now')) ORDER BY created_at DESC LIMIT 1",
+            (user_id,),
+        )
+        if row:
+            return dict(row)
+    if ip_address:
+        row = await fetch_one(
+            "SELECT id, user_id, ip_address, reason, banned_until, is_active FROM user_bans WHERE ip_address = ? AND is_active = 1 AND (banned_until IS NULL OR datetime(banned_until) > datetime('now')) ORDER BY created_at DESC LIMIT 1",
+            (ip_address,),
+        )
+        if row:
+            return dict(row)
+    return None
+
+
+async def register_failed_access(user_id: int = None, ip_address: str = None, reason: str = "invalid_access") -> Optional[Dict]:
+    """Track repeated bad attempts and automatically ban after a threshold is reached."""
+    await execute_query(
+        "INSERT INTO access_attempts (user_id, ip_address, reason, created_at) VALUES (?, ?, ?, datetime('now'))",
+        (user_id, ip_address, reason),
+    )
+
+    window_start = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
+    failures = await fetch_one(
+        "SELECT COUNT(*) as c FROM access_attempts WHERE (user_id = ? OR ip_address = ?) AND created_at >= ?",
+        (user_id, ip_address, window_start),
+    )
+    if int((failures or {}).get("c", 0) or 0) >= 5:
+        await execute_query(
+            "INSERT INTO user_bans (user_id, ip_address, reason, banned_until, is_active) VALUES (?, ?, ?, datetime('now', '+30 minutes'), 1)",
+            (user_id, ip_address, f"{reason}: too many failed attempts"),
+        )
+        return {"banned": True, "reason": "Too many failed attempts"}
+    return None
+
+
+async def create_manual_ban(user_id: int = None, ip_address: str = None, reason: str = "manual_ban", minutes: int = 60) -> Dict:
+    """Create a user or IP ban for abuse or policy violations."""
+    banned_until = (datetime.utcnow() + timedelta(minutes=max(1, minutes))).isoformat()
+    ban_id = await execute_query(
+        "INSERT INTO user_bans (user_id, ip_address, reason, banned_until, is_active) VALUES (?, ?, ?, ?, 1)",
+        (user_id, ip_address, reason, banned_until),
+    )
+    return {"id": ban_id, "reason": reason, "banned_until": banned_until}

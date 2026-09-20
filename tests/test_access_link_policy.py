@@ -1,7 +1,35 @@
 import pytest
 
 from database.db import execute_query
-from security.auth import can_user_upload_for_link
+from security.auth import can_user_upload_for_link, generate_invite_code, validate_invite_code
+
+
+@pytest.mark.asyncio
+async def test_invite_code_enforces_usage_and_expiry():
+    await execute_query("DELETE FROM invite_codes")
+    await execute_query("DELETE FROM users")
+
+    admin_user_id = await execute_query(
+        "INSERT INTO users (username, password_hash, role, is_active) VALUES (?, ?, 'admin', 1)",
+        ("admin_invite_owner", "hash"),
+    )
+
+    code = await generate_invite_code(
+        created_by_user_id=admin_user_id,
+        code="ACCESS-42",
+        role="guest",
+        expires_minutes=60,
+        max_uses=1,
+        allow_uploads=True,
+        allow_urls=True,
+    )
+
+    valid = await validate_invite_code(code, client_ip="10.0.0.1", required_role="guest")
+    assert valid is not None
+    assert valid["code"] == "ACCESS-42"
+
+    reused = await validate_invite_code(code, client_ip="10.0.0.2", required_role="guest")
+    assert reused is None
 
 
 @pytest.mark.asyncio

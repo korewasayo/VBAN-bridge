@@ -12,7 +12,7 @@
             <div class="text-center mb-2">
                 <h1 style="font-size: 3rem; margin-bottom: 10px;">🎵</h1>
                 <h2>VBAN Bridge</h2>
-                <p style="color: var(--text-secondary);">Enter your access token to request music</p>
+                <p style="color: var(--text-secondary);">Enter your access token or invite code to request music</p>
             </div>
 
             {% if error %}
@@ -23,8 +23,8 @@
 
             <form action="/login" method="POST">
                 <div class="form-group">
-                    <label for="token">Access Token</label>
-                    <input type="text" id="token" name="token" class="form-control" placeholder="e.g. ABC-123" required autofocus>
+                    <label for="token">Access Token or Invite Code</label>
+                    <input type="text" id="token" name="token" class="form-control" placeholder="e.g. ABC-123 or ACCESS-42" required autofocus>
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%;">Enter</button>
             </form>

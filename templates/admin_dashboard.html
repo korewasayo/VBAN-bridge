@@ -33,11 +33,13 @@
 
     <div class="container">
         <div class="tabs-nav">
-            <button class="tab-btn active" onclick="switchAdminTab('queue')">Music Queue</button>
-            <button class="tab-btn" onclick="switchAdminTab('channels')">Audio Channels</button>
-            <button class="tab-btn" onclick="switchAdminTab('links')">Access Links</button>
-            <button class="tab-btn" onclick="switchAdminTab('users')">Users</button>
-            <button class="tab-btn" onclick="switchAdminTab('audit')">Audit Log</button>
+            <button class="tab-btn active" onclick="switchAdminTab(event, 'queue')">Music Queue</button>
+            <button class="tab-btn" onclick="switchAdminTab(event, 'channels')">Audio Channels</button>
+            <button class="tab-btn" onclick="switchAdminTab(event, 'links')">Access Links</button>
+            <button class="tab-btn" onclick="switchAdminTab(event, 'invite')">Invite Codes</button>
+            <button class="tab-btn" onclick="switchAdminTab(event, 'users')">Users</button>
+            <button class="tab-btn" onclick="switchAdminTab(event, 'bans')">Bans</button>
+            <button class="tab-btn" onclick="switchAdminTab(event, 'audit')">Audit Log</button>
         </div>
 
         <!-- Music Queue Tab -->
@@ -183,6 +185,62 @@
             </div>
         </div>
 
+        <!-- Invite Codes Tab -->
+        <div id="tab-invite" class="tab-pane card">
+            <h3>Invite Codes</h3>
+            <div class="card" style="background-color: var(--bg-element); margin-top:15px;">
+                <h4>Create Invite Code</h4>
+                <form id="generate-invite-form" onsubmit="generateInviteCode(event)" class="flex-row" style="align-items: flex-end; flex-wrap: wrap; gap: 14px;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Code</label>
+                        <input type="text" id="invite_code" class="form-control" placeholder="ACCESS-42" style="width: 150px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Role</label>
+                        <select id="invite_role" class="form-control" style="width: 120px;">
+                            <option value="guest">Guest</option>
+                            <option value="user">User</option>
+                            <option value="moderator">Moderator</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Expires (min)</label>
+                        <input type="number" id="invite_expiry" class="form-control" value="60" min="1" max="10080" style="width: 100px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Max Uses</label>
+                        <input type="number" id="invite_max_uses" class="form-control" value="1" min="1" max="1000" style="width: 90px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label><input type="checkbox" id="invite_allow_uploads" checked> Upload</label>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label><input type="checkbox" id="invite_allow_urls" checked> URLs</label>
+                    </div>
+                    <button type="submit" class="btn btn-success">Generate</button>
+                </form>
+                <div id="generated-invite-result" class="mt-2" style="display:none; padding:10px; background:var(--bg-main); border-radius:6px; font-family:monospace;"></div>
+            </div>
+
+            <div class="table-responsive mt-2">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Role</th>
+                            <th>Uses</th>
+                            <th>Expires</th>
+                            <th>Permissions</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invite-codes-tbody">
+                        <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Users Tab -->
         <div id="tab-users" class="tab-pane card">
             <h3>User Management</h3>
@@ -221,6 +279,30 @@
                         </tr>
                     </thead>
                     <tbody id="users-tbody">
+                        <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Bans Tab -->
+        <div id="tab-bans" class="tab-pane card">
+            <div class="card-header" style="border:none;">
+                <h3>Access Bans</h3>
+                <button class="btn btn-secondary btn-sm" onclick="fetchBans()">Refresh</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>IP</th>
+                            <th>Reason</th>
+                            <th>Until</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bans-tbody">
                         <tr><td colspan="5" class="text-center">Loading...</td></tr>
                     </tbody>
                 </table>
@@ -299,18 +381,24 @@
 
     <script>
         // Tab Management
-        function switchAdminTab(tabId) {
+        function switchAdminTab(event, tabId) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
             
-            event.target.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            } else if (event && event.target) {
+                event.target.classList.add('active');
+            }
             document.getElementById('tab-' + tabId).classList.add('active');
 
             // Fetch data based on tab
             if (tabId === 'queue') fetchQueue();
             if (tabId === 'channels') fetchChannels();
             if (tabId === 'links') fetchLinks();
+            if (tabId === 'invite') fetchInviteCodes();
             if (tabId === 'users') fetchUsers();
+            if (tabId === 'bans') fetchBans();
             if (tabId === 'audit') fetchAudit();
         }
 
@@ -543,6 +631,47 @@
             } catch (e) { showToast(e.message, 'error'); }
         }
 
+        async function fetchInviteCodes() {
+            try {
+                const data = await fetchAPI('/admin/api/invite-codes');
+                const tbody = document.getElementById('invite-codes-tbody');
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">No invite codes found.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td><code style="background: var(--bg-main); padding: 2px 6px; border-radius: 4px;">${item.code}</code></td>
+                        <td><span class="badge badge-played">${item.role || 'guest'}</span></td>
+                        <td>${item.used_count || 0}/${item.max_uses || 1}</td>
+                        <td>${item.expires_at ? new Date(item.expires_at).toLocaleString() : '-'}</td>
+                        <td>${(Number(item.allow_uploads) ? 'Upload' : '')}${(Number(item.allow_uploads) && Number(item.allow_urls) ? ' · ' : '')}${(Number(item.allow_urls) ? 'URL' : '') || 'None'}</td>
+                        <td>${item.created_at ? new Date(item.created_at).toLocaleString() : '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function generateInviteCode(e) {
+            e.preventDefault();
+            const body = {
+                code: document.getElementById('invite_code').value.trim(),
+                role: document.getElementById('invite_role').value,
+                expires_minutes: parseInt(document.getElementById('invite_expiry').value || '60', 10),
+                max_uses: parseInt(document.getElementById('invite_max_uses').value || '1', 10),
+                allow_uploads: document.getElementById('invite_allow_uploads').checked,
+                allow_urls: document.getElementById('invite_allow_urls').checked
+            };
+            try {
+                const res = await fetchAPI('/admin/api/invite-codes/generate', 'POST', body);
+                const resultDiv = document.getElementById('generated-invite-result');
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<div><strong>Invite Code:</strong> <code>${res.code}</code></div><div>Role: ${res.role} · ${res.max_uses} uses · ${res.expires_minutes} min</div>`;
+                showToast('Invite code generated');
+                fetchInviteCodes();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
         // Users
         async function fetchUsers() {
             try {
@@ -588,6 +717,25 @@
         }
 
         // Audit Log
+        async function fetchBans() {
+            try {
+                const data = await fetchAPI('/admin/api/bans');
+                const tbody = document.getElementById('bans-tbody');
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No active bans.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${item.username || item.user_id || 'Unknown'}</td>
+                        <td>${item.ip_address || '-'}</td>
+                        <td>${item.reason || 'security_violation'}</td>
+                        <td>${item.banned_until ? new Date(item.banned_until).toLocaleString() : '-'}</td>
+                        <td><span class="badge ${item.is_active ? 'badge-approved' : 'badge-rejected'}">${item.is_active ? 'Active' : 'Expired'}</span></td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
         async function fetchAudit() {
             try {
                 const data = await fetchAPI('/admin/api/audit-log');

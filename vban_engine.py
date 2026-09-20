@@ -101,8 +101,12 @@ def start_background_router():
             data, addr = sock.recvfrom(2048)
             source_ip = addr[0] 
 
+            # Prevent routing loop from our own socket
+            if source_ip == '127.0.0.1' and addr[1] == UDP_PORT:
+                continue
+
             if len(data) >= 28 and data.startswith(b'VBAN'):
-                original_name = data[8:24].decode('ascii', errors='ignore').replace('\x00', '')
+                original_name = data[8:24].decode('ascii', errors='ignore').strip('\x00 ')
                 route_key = f"{source_ip}::{original_name}"
                 
                 with route_lock:
