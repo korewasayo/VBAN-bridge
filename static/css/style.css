@@ -531,14 +531,14 @@ a:hover {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 48px;
+    height: 64px;
     background-color: #2a2a2a;
     border-top: 1px solid #3a3a3a;
-    padding: 0 12px;
+    padding: 0 16px;
     display: flex;
     align-items: center;
     z-index: 900;
-    gap: 12px;
+    gap: 16px;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -551,8 +551,8 @@ a:hover {
 }
 
 .sc-btn {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     background: none;
     border: 1px solid #999;
@@ -562,6 +562,7 @@ a:hover {
     justify-content: center;
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
+    font-size: 14px;
 }
 
 .sc-btn:hover {
@@ -579,11 +580,11 @@ a:hover {
 }
 
 .sc-time {
-    font-size: 11px;
+    font-size: 13px;
     color: #999;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
-    min-width: 32px;
+    min-width: 38px;
 }
 
 .sc-progress-bar {
@@ -715,11 +716,11 @@ a:hover {
 }
 
 .sc-art {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
     background-color: #333;
-    border-radius: 2px;
+    border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -733,22 +734,22 @@ a:hover {
 }
 
 .sc-track-title {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     color: #ccc;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.3;
+    line-height: 1.4;
 }
 
 .sc-track-artist {
-    font-size: 11px;
+    font-size: 13px;
     color: #999;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.3;
+    line-height: 1.4;
 }
 
 .sc-track-title:hover {
