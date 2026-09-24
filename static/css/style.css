@@ -26,6 +26,10 @@ body {
     background:
         radial-gradient(circle at top, rgba(45, 108, 223, 0.14), transparent 25%),
         linear-gradient(180deg, #08090d 0%, #0e1014 100%);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-size: cover;
+    min-height: 100vh;
     color: var(--text-primary);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
