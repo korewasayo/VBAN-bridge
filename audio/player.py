@@ -40,7 +40,7 @@ class AudioPlayer:
         cmd = [ffmpeg_cmd]
         
         if start_time > 0:
-            cmd.extend(["-ss", str(start_time)])
+            cmd.extend(["-fflags", "+fastseek", "-noaccurate_seek", "-ss", str(start_time)])
             
         cmd.extend([
             "-re", "-i", file_path,

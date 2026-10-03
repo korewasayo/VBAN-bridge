@@ -1223,8 +1223,12 @@
                 progressBar.classList.remove('dragging');
                 if (!_playerDuration) return;
                 let p = updateProgressUI(e);
+                let targetTime = p * _playerDuration;
+                if (_monitorEnabled && _monitorAudio) {
+                    _monitorAudio.currentTime = targetTime;
+                }
                 try {
-                    await fetchAPI('/admin/api/player/seek', 'POST', { time: p * _playerDuration });
+                    await fetchAPI('/admin/api/player/seek', 'POST', { time: targetTime });
                 } catch (err) {
                     console.error('Seek error', err);
                     showToast(err.message, 'error');
