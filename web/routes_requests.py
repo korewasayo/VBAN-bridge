@@ -268,6 +268,9 @@ async def advance_player(request: Request, user: dict = Depends(require_permissi
                 
         # Find next approved
         next_req = await fetch_one("SELECT id, mp3_path FROM music_requests WHERE status = 'approved' ORDER BY created_at ASC LIMIT 1")
+        if not next_req and current_playing:
+            # Fallback: find the next chronological request that is not rejected
+            next_req = await fetch_one("SELECT id, mp3_path FROM music_requests WHERE id > ? AND status != 'rejected' ORDER BY id ASC LIMIT 1", (current_playing["id"],))
         if next_req:
             # Mark it playing
             await execute_query("UPDATE music_requests SET status = 'playing' WHERE id = ?", (next_req["id"],))

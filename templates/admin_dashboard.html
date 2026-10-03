@@ -1104,12 +1104,12 @@
             document.getElementById('player-repeat-btn').classList.toggle('active', _repeatEnabled);
         });
 
-        document.getElementById('player-prev-btn').addEventListener('click', () => {
+        document.getElementById('player-prev-btn').addEventListener('click', async () => {
             if (!window.currentQueue) return;
             const currentIdx = window.currentQueue.findIndex(i => i.id === _playerCurrentId);
             if (currentIdx > 0) {
                 _playerElapsedSeconds = 0;
-                updateReq(window.currentQueue[currentIdx - 1].id, 'play', true);
+                await updateReq(window.currentQueue[currentIdx - 1].id, 'play', false);
             }
         });
 
