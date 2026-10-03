@@ -38,11 +38,13 @@ class AudioPlayer:
         ffmpeg_cmd = "ffmpeg" if "ffplay" in FFPLAY_PATH.lower() else FFPLAY_PATH
         
         cmd = [ffmpeg_cmd]
+        
+        cmd.extend(["-re", "-i", file_path])
+        
         if start_time > 0:
             cmd.extend(["-ss", str(start_time)])
             
         cmd.extend([
-            "-re", "-i", file_path,
             "-f", "s16le", "-ar", "48000", "-ac", "2", "-loglevel", "quiet", "-"
         ])
         

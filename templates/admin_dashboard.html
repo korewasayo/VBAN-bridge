@@ -1161,7 +1161,6 @@
 
         // Progress bar
         const progressBar = document.querySelector('.sc-progress-bar');
-        const progressTooltip = document.getElementById('player-progress-tooltip');
         let isDraggingProgress = false;
 
         function updateProgressUI(e) {
@@ -1182,8 +1181,6 @@
             const rect = progressBar.getBoundingClientRect();
             let p = (e.clientX - rect.left) / rect.width;
             p = Math.max(0, Math.min(1, p));
-            progressTooltip.style.left = (p * 100) + '%';
-            progressTooltip.textContent = formatTime(Math.floor(p * _playerDuration));
         });
 
         progressBar.addEventListener('mousedown', (e) => {
@@ -1195,13 +1192,6 @@
         window.addEventListener('mousemove', (e) => {
             if (isDraggingProgress) {
                 updateProgressUI(e);
-                if (_playerDuration) {
-                    const rect = progressBar.getBoundingClientRect();
-                    let p = (e.clientX - rect.left) / rect.width;
-                    p = Math.max(0, Math.min(1, p));
-                    progressTooltip.style.left = (p * 100) + '%';
-                    progressTooltip.textContent = formatTime(Math.floor(p * _playerDuration));
-                }
             }
         });
 
