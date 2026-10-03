@@ -129,14 +129,14 @@ async def upload_request(request: Request, title: str = Form(...), artist: str =
 @router.get("/api/requests/queue")
 async def get_queue(user: dict = Depends(require_permission("view_queue"))):
     requests = await fetch_all(
-        "SELECT id, title, artist, duration_seconds, status, source_type, created_at FROM music_requests WHERE status IN ('pending', 'approved', 'playing') ORDER BY created_at ASC"
+        "SELECT id, title, artist, duration_seconds, status, source_type, created_at, is_looping FROM music_requests WHERE status IN ('pending', 'approved', 'playing') ORDER BY created_at ASC"
     )
     return [dict(r) for r in requests]
 
 @router.get("/admin/api/requests")
 async def admin_get_requests(status: str = None, user: dict = Depends(require_permission("manage_requests"))):
     query = """
-        SELECT r.id, r.title, r.artist, r.status, r.source_type, r.created_at, r.mp3_path, r.duration_seconds,
+        SELECT r.id, r.title, r.artist, r.status, r.source_type, r.created_at, r.mp3_path, r.duration_seconds, r.is_looping,
                u.username as requested_by
         FROM music_requests r
         LEFT JOIN users u ON r.user_id = u.id
@@ -251,6 +251,47 @@ async def seek_player(request: Request, data: dict, user: dict = Depends(require
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+@router.post("/admin/api/player/advance")
+async def advance_player(request: Request, user: dict = Depends(require_permission("manage_requests"))):
+    try:
+        from audio.player import player
+        
+        # Mark current playing as played or requeue if looping
+        current_playing = await fetch_one("SELECT id, is_looping FROM music_requests WHERE status = 'playing'")
+        if current_playing:
+            if current_playing["is_looping"]:
+                # Requeue at the end
+                await execute_query("UPDATE music_requests SET status = 'approved', created_at = datetime('now') WHERE id = ?", (current_playing["id"],))
+            else:
+                await execute_query("UPDATE music_requests SET status = 'played' WHERE id = ?", (current_playing["id"],))
+                
+        # Find next approved
+        next_req = await fetch_one("SELECT id, mp3_path FROM music_requests WHERE status = 'approved' ORDER BY created_at ASC LIMIT 1")
+        if next_req:
+            # Mark it playing
+            await execute_query("UPDATE music_requests SET status = 'playing' WHERE id = ?", (next_req["id"],))
+            # Start player
+            success = player.play(next_req["mp3_path"])
+            if not success:
+                await execute_query("UPDATE music_requests SET status = 'rejected', reject_reason = 'Failed to play audio' WHERE id = ?", (next_req["id"],))
+                raise HTTPException(status_code=500, detail="Failed to play the next audio file via VBAN.")
+            return {"status": "success", "playing_id": next_req["id"]}
+        else:
+            player.stop()
+            return {"status": "success", "playing_id": None}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/api/requests/{request_id}/toggle_loop")
+async def toggle_loop(request: Request, request_id: int, user: dict = Depends(require_permission("manage_requests"))):
+    req = await fetch_one("SELECT is_looping FROM music_requests WHERE id = ?", (request_id,))
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    new_loop_status = 1 if not req["is_looping"] else 0
+    await execute_query("UPDATE music_requests SET is_looping = ? WHERE id = ?", (new_loop_status, request_id))
+    return {"status": "success", "is_looping": new_loop_status}
 
 @router.delete("/admin/api/requests/{request_id}")
 async def delete_request(request: Request, request_id: int, user: dict = Depends(require_permission("manage_requests"))):

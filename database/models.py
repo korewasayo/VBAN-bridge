@@ -111,6 +111,7 @@ TABLES_SQL = [
         reviewed_by INTEGER,
         reviewed_at TEXT,
         reject_reason TEXT,
+        is_looping INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (reviewed_by) REFERENCES users(id)
     );

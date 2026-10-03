@@ -277,10 +277,11 @@
                         <div class="queue-item">
                             <div class="queue-number">${index + 1}</div>
                             <div class="queue-details">
-                                <div class="queue-title">${item.title || 'Unknown Title'}</div>
+                                <div class="queue-title" style="color: ${item.status.toLowerCase() === 'playing' ? 'var(--accent-green)' : 'inherit'};">${item.title || 'Unknown Title'}</div>
                                 <div class="queue-artist">${item.artist || 'Unknown Artist'}</div>
                             </div>
-                            <div class="queue-meta">
+                            <div class="queue-meta" style="display: flex; gap: 8px; align-items: center;">
+                                ${item.is_looping ? '<span title="This track will repeat" style="font-size: 1.1rem; color: var(--accent-blue);">🔁</span>' : ''}
                                 <span class="badge ${getBadgeClass(item.status)}">${item.status}</span>
                             </div>
                         </div>`;

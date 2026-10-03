@@ -246,6 +246,9 @@ a:hover {
 .btn-danger { background-color: var(--accent-red); color: #fff; }
 .btn-warning { background-color: var(--accent-yellow); color: #fff; }
 .btn-secondary { background-color: var(--bg-element); color: #fff; border: 1px solid var(--border-color); }
+.btn-info { background-color: var(--accent-blue); color: #fff; border: 1px solid var(--accent-blue); }
+.btn-outline-info { background-color: transparent; color: var(--text-primary); border: 1px solid var(--border-color); }
+.btn-outline-info:hover { background-color: rgba(255,255,255,0.05); }
 
 .btn-sm { padding: 5px 10px; font-size: 0.875rem; }
 

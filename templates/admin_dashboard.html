@@ -603,14 +603,14 @@
                         playingItem = item;
                     }
                     return `
-                    <tr>
-                        <td>${item.id}</td>
-                        <td><strong>${item.title || '-'}</strong></td>
-                        <td>${item.artist || '-'}</td>
-                        <td>${item.type}</td>
+                    <tr style="transition: all 0.2s; background: ${status === 'playing' ? 'rgba(29, 185, 84, 0.1)' : 'transparent'};">
+                        <td style="color: var(--text-secondary); width: 40px; text-align: center;">${item.id}</td>
+                        <td style="font-weight: 600; color: ${status === 'playing' ? 'var(--accent-green)' : 'var(--text-primary)'};">${item.title || '-'}</td>
+                        <td style="color: var(--text-secondary);">${item.artist || '-'}</td>
+                        <td style="color: var(--text-secondary); font-size: 0.9em;">${item.source_type || '-'}</td>
                         <td><span class="badge ${getBadgeClass(item.status)}">${item.status}</span></td>
-                        <td>${item.requested_by || 'Unknown'}</td>
-                        <td>${new Date(item.created_at).toLocaleString()}</td>
+                        <td style="color: var(--text-secondary); font-size: 0.9em;">${item.requested_by || 'Unknown'}</td>
+                        <td style="color: var(--text-secondary); font-size: 0.85em;">${new Date(item.created_at).toLocaleString()}</td>
                         <td>${getQueueActions(item)}</td>
                     </tr>
                 `}).join('');
@@ -621,21 +621,40 @@
         }
 
         function getQueueActions(item) {
-            let btns = '';
+            let btns = '<div style="display: flex; gap: 4px;">';
             const status = (item.status || '').toLowerCase();
+            const isLooping = item.is_looping === 1;
+            const loopStyle = isLooping ? 'btn-info active' : 'btn-outline-info';
+            const loopText = isLooping ? '🔁 Looping' : '🔁 Loop';
+            
             if (status === 'pending') {
                 btns += `<button class="btn btn-success btn-sm" onclick="updateReq(${item.id}, 'approve')">✅</button> `;
                 btns += `<button class="btn btn-warning btn-sm" onclick="rejectReq(${item.id})">❌</button> `;
                 btns += `<button class="btn btn-danger btn-sm" onclick="deleteReq(${item.id})">🗑️</button>`;
-            } else if (status === 'approved') {
-                btns += `<button class="btn btn-primary btn-sm" onclick="updateReq(${item.id}, 'play')">▶️ Play</button> `;
+            } else if (status === 'approved' || status === 'playing') {
+                if (status === 'approved') {
+                    btns += `<button class="btn btn-primary btn-sm" onclick="updateReq(${item.id}, 'play')">▶️ Play</button> `;
+                } else if (status === 'playing') {
+                    btns += `<button class="btn btn-secondary btn-sm" onclick="updateReq(${item.id}, 'stop')">⏹️ Stop</button> `;
+                }
+                btns += `<button class="btn ${loopStyle} btn-sm" onclick="toggleLoop(${item.id})">${loopText}</button> `;
                 btns += `<button class="btn btn-danger btn-sm" onclick="deleteReq(${item.id})">🗑️</button>`;
-            } else if (status === 'playing') {
-                btns += `<button class="btn btn-secondary btn-sm" onclick="updateReq(${item.id}, 'stop')">⏹️ Stop</button>`;
             } else {
+                btns += `<button class="btn btn-primary btn-sm" onclick="updateReq(${item.id}, 'play')">▶️ Replay</button> `;
+                btns += `<button class="btn ${loopStyle} btn-sm" onclick="toggleLoop(${item.id})">${loopText}</button> `;
                 btns += `<button class="btn btn-danger btn-sm" onclick="deleteReq(${item.id})">🗑️</button>`;
             }
+            btns += '</div>';
             return btns;
+        }
+
+        async function toggleLoop(id) {
+            try {
+                await fetchAPI(`/admin/api/requests/${id}/toggle_loop`, 'POST');
+                fetchQueue();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
         }
 
         async function updateReq(id, action, silent = false) {
@@ -961,10 +980,17 @@
                     }
                 }
                 
-                if (_wasPlaying && !res.is_playing && _repeatEnabled && _playerCurrentId) {
-                    // Only repeat if the track naturally ended (elapsed is close to duration)
+                if (_wasPlaying && !res.is_playing && _playerCurrentId) {
+                    // Only advance/repeat if the track naturally ended
                     if (_playerDuration > 0 && _playerElapsedSeconds >= _playerDuration - 3) {
-                        updateReq(_playerCurrentId, 'play', true);
+                        if (_repeatEnabled) {
+                            updateReq(_playerCurrentId, 'play', true);
+                        } else {
+                            try {
+                                await fetchAPI(`/admin/api/player/advance`, 'POST');
+                                fetchQueue();
+                            } catch (e) { console.error(e); }
+                        }
                     }
                 }
                 _wasPlaying = res.is_playing;
@@ -1087,18 +1113,14 @@
             }
         });
 
-        document.getElementById('player-next-btn').addEventListener('click', () => {
+        document.getElementById('player-next-btn').addEventListener('click', async () => {
             if (!window.currentQueue) return;
-            const currentIdx = window.currentQueue.findIndex(i => i.id === _playerCurrentId);
-            if (currentIdx >= 0 && currentIdx < window.currentQueue.length - 1) {
-                _playerElapsedSeconds = 0;
-                updateReq(window.currentQueue[currentIdx + 1].id, 'play', true);
-            } else if (window.currentQueue.length > 0 && currentIdx === -1) {
-                const nextItem = window.currentQueue.find(i => ['pending', 'approved'].includes((i.status || '').toLowerCase()));
-                if (nextItem) {
-                    _playerElapsedSeconds = 0;
-                    updateReq(nextItem.id, 'play', true);
-                }
+            try {
+                await fetchAPI('/admin/api/player/advance', 'POST');
+                fetchQueue();
+            } catch (err) {
+                console.error('Advance error', err);
+                showToast(err.message, 'error');
             }
         });
 
