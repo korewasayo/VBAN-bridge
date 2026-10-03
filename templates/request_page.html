@@ -19,6 +19,9 @@
 
             <div class="user-panel">
                 {% if user %}
+                    {% if user.role in ['admin', 'super_admin', 'moderator'] %}
+                        <a href="/admin/dashboard" class="btn btn-primary btn-sm" style="margin-right: 8px;">Admin Page</a>
+                    {% endif %}
                     <span class="user-badge">Logged in as {{ user.username }}</span>
                     <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
                 {% else %}

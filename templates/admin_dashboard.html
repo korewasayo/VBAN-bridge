@@ -27,6 +27,7 @@
         <h2>VBAN Bridge Admin 🎛️</h2>
         <div class="user-info">
             <span>Logged in as <strong>{{ user.username if user else 'Admin' }}</strong> ({{ user.role if user else 'Role' }})</span>
+            <a href="/request" class="btn btn-primary btn-sm" style="margin-right: 8px;">Request Page</a>
             <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
         </div>
     </div>
