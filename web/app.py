@@ -37,6 +37,9 @@ def create_application(lifespan: Callable) -> FastAPI:
     @app.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):
         """Rate limit by client IP."""
+        if request.url.path.startswith("/admin/api/"):
+            return await call_next(request)
+            
         client_ip = get_client_ip(request)
         if not rate_limiter.is_allowed(client_ip):
             return HTMLResponse("Rate limit exceeded. Please wait.", status_code=429)
