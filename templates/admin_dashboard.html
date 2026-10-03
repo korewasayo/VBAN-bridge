@@ -593,12 +593,12 @@
             return btns;
         }
 
-        async function updateReq(id, action) {
+        async function updateReq(id, action, silent = false) {
             try {
                 await fetchAPI(`/admin/api/requests/${id}/${action}`, 'POST');
-                showToast(`Request ${action}d successfully`);
+                if (!silent) showToast(`Request ${action}d successfully`);
                 fetchQueue();
-            } catch (e) { showToast(e.message, 'error'); }
+            } catch (e) { if (!silent) showToast(e.message, 'error'); }
         }
 
         async function rejectReq(id) {
@@ -907,7 +907,7 @@
                 }
                 
                 if (_wasPlaying && !res.is_playing && _repeatEnabled && _playerCurrentId) {
-                    updateReq(_playerCurrentId, 'play');
+                    updateReq(_playerCurrentId, 'play', true);
                 }
                 _wasPlaying = res.is_playing;
                 
@@ -994,16 +994,13 @@
         document.getElementById('player-repeat-btn').addEventListener('click', () => {
             _repeatEnabled = !_repeatEnabled;
             document.getElementById('player-repeat-btn').classList.toggle('active', _repeatEnabled);
-            showToast(_repeatEnabled ? 'Repeat enabled' : 'Repeat disabled');
         });
 
         document.getElementById('player-prev-btn').addEventListener('click', () => {
             if (!window.currentQueue) return;
             const currentIdx = window.currentQueue.findIndex(i => i.id === _playerCurrentId);
             if (currentIdx > 0) {
-                updateReq(window.currentQueue[currentIdx - 1].id, 'play');
-            } else {
-                showToast('Already at the beginning of the queue');
+                updateReq(window.currentQueue[currentIdx - 1].id, 'play', true);
             }
         });
 
@@ -1011,12 +1008,10 @@
             if (!window.currentQueue) return;
             const currentIdx = window.currentQueue.findIndex(i => i.id === _playerCurrentId);
             if (currentIdx >= 0 && currentIdx < window.currentQueue.length - 1) {
-                updateReq(window.currentQueue[currentIdx + 1].id, 'play');
+                updateReq(window.currentQueue[currentIdx + 1].id, 'play', true);
             } else if (window.currentQueue.length > 0 && currentIdx === -1) {
                 const nextItem = window.currentQueue.find(i => ['pending', 'approved'].includes((i.status || '').toLowerCase()));
-                if (nextItem) updateReq(nextItem.id, 'play');
-            } else {
-                showToast('No more tracks in queue');
+                if (nextItem) updateReq(nextItem.id, 'play', true);
             }
         });
 
