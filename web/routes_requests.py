@@ -1,7 +1,46 @@
 import os
-from fastapi import APIRouter, Request, Depends, HTTPException, Form, UploadFile, File, BackgroundTasks
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi import APIRouter, Request, Depends, HTTPException, Form, UploadFile, File, BackgroundTasks, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+
+def range_requests_response(request: Request, file_path: str, content_type: str):
+    file_size = os.path.getsize(file_path)
+    range_header = request.headers.get("range")
+
+    if not range_header:
+        return FileResponse(file_path, media_type=content_type, headers={"Accept-Ranges": "bytes"})
+
+    try:
+        byte_range = range_header.replace("bytes=", "").split("-")
+        start = int(byte_range[0])
+        end = int(byte_range[1]) if len(byte_range) > 1 and byte_range[1] else file_size - 1
+    except ValueError:
+        return Response(status_code=400, content="Invalid Range header")
+
+    if start >= file_size or end >= file_size or start > end:
+        return Response(status_code=416, content="Range Not Satisfiable")
+
+    chunk_size = end - start + 1
+
+    def file_iterator():
+        with open(file_path, "rb") as f:
+            f.seek(start)
+            bytes_left = chunk_size
+            while bytes_left > 0:
+                chunk = f.read(min(bytes_left, 1024 * 64))
+                if not chunk:
+                    break
+                bytes_left -= len(chunk)
+                yield chunk
+
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(chunk_size),
+        "Content-Type": content_type,
+    }
+
+    return StreamingResponse(file_iterator(), status_code=206, headers=headers)
 from audio.downloader import download_audio_task
 
 from security.rbac import require_permission, get_current_user
@@ -167,7 +206,7 @@ async def stop_request(request: Request, request_id: int, user: dict = Depends(r
 async def stream_audio_request(request: Request, request_id: int, user: dict = Depends(require_permission("view_dashboard"))):
     req = await fetch_one("SELECT mp3_path FROM music_requests WHERE id = ?", (request_id,))
     if req and req["mp3_path"] and os.path.exists(req["mp3_path"]):
-        return FileResponse(req["mp3_path"], media_type="audio/mpeg")
+        return range_requests_response(request, req["mp3_path"], "audio/mpeg")
     raise HTTPException(status_code=404, detail="Audio file not found")
 
 @router.post("/admin/api/player/pause")
