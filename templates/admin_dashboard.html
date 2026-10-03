@@ -25,28 +25,75 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            background: rgba(18, 19, 22, 0.95);
-            backdrop-filter: blur(10px);
-            border-top: 1px solid var(--border-color);
-            padding: 12px 24px;
+            height: 90px;
+            background: rgba(15, 16, 20, 0.95);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding: 0 32px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 24px;
             z-index: 1000;
-            box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
+        }
+        .sc-track-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            width: 30%;
+            min-width: 200px;
+        }
+        .sc-art {
+            width: 56px;
+            height: 56px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+        }
+        .sc-track-text {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .sc-track-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sc-track-artist {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 2px;
+        }
+        .sc-middle-section {
+            width: 40%;
+            max-width: 722px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         .sc-controls {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 20px;
         }
         .sc-btn {
             background: transparent;
             border: none;
             color: var(--text-secondary);
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -61,49 +108,42 @@
         .sc-btn.active {
             color: var(--accent-blue);
         }
+        .sc-btn.play-pause {
+            width: 40px;
+            height: 40px;
+            background: var(--text-primary);
+            color: var(--bg-main);
+        }
+        .sc-btn.play-pause:hover {
+            transform: scale(1.05);
+            background: #fff;
+            color: var(--bg-main);
+        }
         .sc-btn svg {
             width: 18px;
             height: 18px;
         }
-        .sc-track-info {
+        .sc-progress-section {
+            width: 100%;
             display: flex;
             align-items: center;
             gap: 12px;
-            width: 250px;
-        }
-        .sc-art {
-            width: 48px;
-            height: 48px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .sc-track-text {
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .sc-track-title {
-            font-weight: 600;
-            font-size: 0.95rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .sc-track-artist {
-            font-size: 0.8rem;
+            font-size: 12px;
             color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        }
+        .sc-time {
+            min-width: 40px;
+            text-align: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-variant-numeric: tabular-nums;
         }
         .sc-volume {
             display: flex;
             align-items: center;
+            justify-content: flex-end;
             gap: 12px;
-            width: 200px;
+            width: 30%;
+            min-width: 200px;
         }
         .sc-volume-icon {
             width: 20px;
@@ -438,7 +478,7 @@
         </div>
 
         <!-- Transport controls & Progress -->
-        <div class="sc-middle-section" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+        <div class="sc-middle-section">
             <div class="sc-controls">
                 <button class="sc-btn" id="player-repeat-btn" title="Repeat">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
@@ -446,8 +486,8 @@
                 <button class="sc-btn" id="player-prev-btn" title="Previous (Unskip)">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
                 </button>
-                <button class="sc-btn" id="player-pause-btn" title="Pause/Resume" style="width: 48px; height: 48px; background: var(--text-primary); color: var(--bg-main);">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
+                <button class="sc-btn play-pause" id="player-pause-btn" title="Pause/Resume">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
                         <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" id="pause-icon"/>
                         <path d="M8 5v14l11-7z" id="play-icon" style="display: none;"/>
                     </svg>
@@ -459,22 +499,23 @@
                     <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
                 </button>
             </div>
-            <div class="sc-progress-section" style="width: 100%; max-width: 600px; display: flex; align-items: center; gap: 16px;">
-                <span class="sc-time" id="player-elapsed">0:00</span>
-                <div class="sc-progress-bar" style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; cursor: pointer;">
-                    <div class="sc-progress-fill" id="player-progress-fill" style="height: 100%; background: var(--accent-blue); border-radius: 3px; width: 0%;"></div>
+            <div class="sc-progress-section">
+                <span class="sc-time" id="player-elapsed" style="text-align: right;">0:00</span>
+                <div class="sc-progress-bar" style="flex: 1; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; cursor: pointer; transition: height 0.1s; position: relative;">
+                    <div class="sc-progress-fill" id="player-progress-fill" style="height: 100%; background: var(--text-primary); border-radius: 2px; width: 0%; position: absolute; left: 0; top: 0;"></div>
                 </div>
+                <span class="sc-time" id="player-duration" style="text-align: left;">0:00</span>
             </div>
         </div>
 
         <!-- Volume & Monitor -->
         <div class="sc-volume">
-            <button class="sc-btn" id="monitor-btn" title="Listen Locally" style="width: 28px; height: 28px; color: var(--text-secondary);">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            <button class="sc-btn" id="monitor-btn" title="Listen Locally" style="width: 32px; height: 32px;">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
             </button>
             <svg class="sc-volume-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-            <div class="sc-volume-bar" style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; cursor: pointer;">
-                <div class="sc-volume-fill" style="height: 100%; background: var(--text-primary); border-radius: 3px; width: 80%;"></div>
+            <div class="sc-volume-bar" style="width: 100px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; cursor: pointer; position: relative;">
+                <div class="sc-volume-fill" style="height: 100%; background: var(--text-primary); border-radius: 2px; width: 80%; position: absolute; left: 0; top: 0;"></div>
             </div>
         </div>
     </div>
@@ -888,6 +929,7 @@
             try {
                 const res = await fetchAPI('/admin/api/player/status');
                 _playerDuration = res.duration || 0;
+                document.getElementById('player-duration').textContent = formatTime(Math.floor(_playerDuration));
                 
                 if (res.elapsed !== undefined) {
                     // Sync the client side elapsed time with the server
