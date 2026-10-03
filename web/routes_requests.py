@@ -1,6 +1,6 @@
 import os
 from fastapi import APIRouter, Request, Depends, HTTPException, Form, UploadFile, File, BackgroundTasks
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from audio.downloader import download_audio_task
 
@@ -21,6 +21,8 @@ def get_client_ip(request: Request) -> str:
 
 @router.get("/request", response_class=HTMLResponse)
 async def request_page(request: Request, user: dict = Depends(get_current_user)):
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse("request_page.html", {"request": request, "user": user})
 
 @router.post("/api/requests/submit")
