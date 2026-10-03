@@ -467,14 +467,18 @@
             </div>
         </div>
 
-        <!-- Volume -->
+        <!-- Volume & Monitor -->
         <div class="sc-volume">
+            <button class="sc-btn" id="monitor-btn" title="Listen Locally" style="width: 28px; height: 28px; color: var(--text-secondary);">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            </button>
             <svg class="sc-volume-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
             <div class="sc-volume-bar" style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; cursor: pointer;">
                 <div class="sc-volume-fill" style="height: 100%; background: var(--text-primary); border-radius: 3px; width: 80%;"></div>
             </div>
         </div>
     </div>
+    <audio id="local-monitor-audio" style="display: none;"></audio>
 
     <div id="toast-container"></div>
 
@@ -871,6 +875,8 @@
         let _playerStatusInterval = null;
         let _repeatEnabled = false;
         let _wasPlaying = false;
+        let _monitorEnabled = false;
+        const _monitorAudio = document.getElementById('local-monitor-audio');
 
         function formatTime(totalSeconds) {
             const m = Math.floor(totalSeconds / 60);
@@ -894,6 +900,12 @@
                             document.getElementById('player-progress-fill').style.width = pct + '%';
                         }
                     }
+                    
+                    if (_monitorEnabled && res.is_playing) {
+                        if (Math.abs(_monitorAudio.currentTime - res.elapsed) > 2.0) {
+                            _monitorAudio.currentTime = res.elapsed;
+                        }
+                    }
                 }
                 
                 // Keep UI in sync with backend state
@@ -903,6 +915,7 @@
                         if (volumeFill) {
                             volumeFill.style.width = (res.volume * 100) + '%';
                         }
+                        _monitorAudio.volume = res.volume;
                     }
                 }
                 
@@ -914,12 +927,14 @@
                 const pauseIcon = document.getElementById('pause-icon');
                 const playIcon = document.getElementById('play-icon');
                 _isPausedState = res.is_paused;
-                if (_isPausedState) {
+                if (_isPausedState || !res.is_playing) {
                     pauseIcon.style.display = 'none';
                     playIcon.style.display = '';
+                    if (_monitorEnabled) _monitorAudio.pause();
                 } else {
                     pauseIcon.style.display = '';
                     playIcon.style.display = 'none';
+                    if (_monitorEnabled && _monitorAudio.paused) _monitorAudio.play().catch(e=>console.log(e));
                 }
             } catch (err) {
                 console.error("Status fetch error", err);
@@ -955,6 +970,10 @@
             // Start elapsed timer only if track changed
             if (_playerCurrentId !== item.id) {
                 _playerCurrentId = item.id;
+                _monitorAudio.src = `/admin/api/requests/${item.id}/audio`;
+                if (_monitorEnabled && !_isPausedState) {
+                    _monitorAudio.play().catch(e => console.log(e));
+                }
                 _playerElapsedSeconds = 0;
                 _playerDuration = 0;
                 document.getElementById('player-elapsed').textContent = '0:00';
@@ -991,6 +1010,24 @@
         }
 
         let _isPausedState = false;
+        
+        document.getElementById('monitor-btn').addEventListener('click', () => {
+            _monitorEnabled = !_monitorEnabled;
+            const btn = document.getElementById('monitor-btn');
+            btn.style.color = _monitorEnabled ? 'var(--accent-blue)' : 'var(--text-secondary)';
+            
+            if (_monitorEnabled && !_isPausedState && _playerCurrentId) {
+                _monitorAudio.play().catch(e => {
+                    console.log("Autoplay blocked", e);
+                    _monitorEnabled = false;
+                    btn.style.color = 'var(--text-secondary)';
+                    showToast("Playback blocked by browser. Please interact with the page first.", "error");
+                });
+            } else {
+                _monitorAudio.pause();
+            }
+        });
+
         document.getElementById('player-repeat-btn').addEventListener('click', () => {
             _repeatEnabled = !_repeatEnabled;
             document.getElementById('player-repeat-btn').classList.toggle('active', _repeatEnabled);

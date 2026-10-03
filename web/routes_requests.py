@@ -1,6 +1,6 @@
 import os
 from fastapi import APIRouter, Request, Depends, HTTPException, Form, UploadFile, File, BackgroundTasks
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from audio.downloader import download_audio_task
 
@@ -162,6 +162,13 @@ async def stop_request(request: Request, request_id: int, user: dict = Depends(r
     ip = get_client_ip(request)
     await add_audit_log(user["id"], "stop_request", f"Stopped request {request_id}", ip)
     return {"status": "success"}
+
+@router.get("/admin/api/requests/{request_id}/audio")
+async def stream_audio_request(request: Request, request_id: int, user: dict = Depends(require_permission("view_dashboard"))):
+    req = await fetch_one("SELECT mp3_path FROM music_requests WHERE id = ?", (request_id,))
+    if req and req["mp3_path"] and os.path.exists(req["mp3_path"]):
+        return FileResponse(req["mp3_path"], media_type="audio/mpeg")
+    raise HTTPException(status_code=404, detail="Audio file not found")
 
 @router.post("/admin/api/player/pause")
 async def pause_player(request: Request, user: dict = Depends(require_permission("manage_requests"))):
