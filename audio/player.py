@@ -119,8 +119,7 @@ class AudioPlayer:
         finally:
             if local_process:
                 try:
-                    local_process.terminate()
-                    local_process.wait(timeout=2)
+                    local_process.kill()
                 except:
                     pass
                 if self._process == local_process:
@@ -176,13 +175,9 @@ class AudioPlayer:
         self._total_paused_time = 0
         if self._process is not None:
             try:
-                self._process.terminate()
-                self._process.wait(timeout=2)
-            except Exception as e:
-                try:
-                    self._process.kill()
-                except:
-                    pass
+                self._process.kill()
+            except Exception:
+                pass
             finally:
                 self._process = None
         self._current_file = None
