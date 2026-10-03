@@ -599,14 +599,15 @@
                 let playingItem = null;
                 window.currentQueue = data;
                 tbody.innerHTML = data.map((item, i) => {
-                    if ((item.status || '').toLowerCase() === 'playing') {
+                    const status = (item.status || '').toLowerCase();
+                    if (status === 'playing') {
                         playingItem = item;
                     }
                     return `
                     <tr style="transition: all 0.2s; background: ${status === 'playing' ? 'rgba(29, 185, 84, 0.1)' : 'transparent'};">
                         <td style="color: var(--text-secondary); width: 40px; text-align: center;">${item.id}</td>
-                        <td style="font-weight: 600; color: ${status === 'playing' ? 'var(--accent-green)' : 'var(--text-primary)'};">${item.title || '-'}</td>
-                        <td style="color: var(--text-secondary);">${item.artist || '-'}</td>
+                        <td style="font-weight: 600; color: ${status === 'playing' ? 'var(--accent-green)' : 'var(--text-primary)'}; cursor: pointer;" onclick="updateReq('${item.id}', 'play')" title="Click to play">${item.title || '-'}</td>
+                        <td style="color: var(--text-secondary); cursor: pointer;" onclick="updateReq('${item.id}', 'play')" title="Click to play">${item.artist || '-'}</td>
                         <td style="color: var(--text-secondary); font-size: 0.9em;">${item.source_type || '-'}</td>
                         <td><span class="badge ${getBadgeClass(item.status)}">${item.status}</span></td>
                         <td style="color: var(--text-secondary); font-size: 0.9em;">${item.requested_by || 'Unknown'}</td>
