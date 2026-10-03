@@ -20,6 +20,96 @@
             align-items: center;
             gap: 15px;
         }
+        .player-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(18, 19, 22, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            z-index: 1000;
+            box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
+        }
+        .sc-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sc-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .sc-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .sc-btn.active {
+            color: var(--accent-blue);
+        }
+        .sc-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+        .sc-track-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 250px;
+        }
+        .sc-art {
+            width: 48px;
+            height: 48px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sc-track-text {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .sc-track-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sc-track-artist {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sc-volume {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 200px;
+        }
+        .sc-volume-icon {
+            width: 20px;
+            height: 20px;
+            color: var(--text-secondary);
+        }
     </style>
 </head>
 <body>
@@ -336,44 +426,52 @@
     </div>
 
     <div id="player-bar" class="player-bar" style="display: none;">
-        <!-- Transport controls -->
-        <div class="sc-controls">
-            <button class="sc-btn" id="player-pause-btn" title="Pause/Resume">
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                    <path d="M2 1h2v8H2zm4 0h2v8H6z" id="pause-icon"/>
-                    <path d="M2.5 1.5L8 5L2.5 8.5V1.5Z" id="play-icon" style="display: none;"/>
-                </svg>
-            </button>
-            <button class="sc-btn" id="player-stop-btn" title="Stop">
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10" rx="1"/></svg>
-            </button>
+        <!-- Track info -->
+        <div class="sc-track-info">
+            <div class="sc-art" id="player-art">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            </div>
+            <div class="sc-track-text">
+                <span class="sc-track-title" id="player-title">-</span>
+                <span class="sc-track-artist" id="player-artist">-</span>
+            </div>
         </div>
 
-        <!-- Progress section -->
-        <div class="sc-progress-section">
-            <span class="sc-time" id="player-elapsed">0:00</span>
-            <div class="sc-progress-bar">
-                <div class="sc-progress-fill" id="player-progress-fill"></div>
-                <div class="sc-progress-tooltip" id="player-progress-tooltip">0:00</div>
+        <!-- Transport controls & Progress -->
+        <div class="sc-middle-section" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div class="sc-controls">
+                <button class="sc-btn" id="player-repeat-btn" title="Repeat">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                </button>
+                <button class="sc-btn" id="player-prev-btn" title="Previous (Unskip)">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </button>
+                <button class="sc-btn" id="player-pause-btn" title="Pause/Resume" style="width: 48px; height: 48px; background: var(--text-primary); color: var(--bg-main);">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" id="pause-icon"/>
+                        <path d="M8 5v14l11-7z" id="play-icon" style="display: none;"/>
+                    </svg>
+                </button>
+                <button class="sc-btn" id="player-next-btn" title="Next (Skip)">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                </button>
+                <button class="sc-btn" id="player-stop-btn" title="Stop">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+                </button>
+            </div>
+            <div class="sc-progress-section" style="width: 100%; max-width: 600px; display: flex; align-items: center; gap: 16px;">
+                <span class="sc-time" id="player-elapsed">0:00</span>
+                <div class="sc-progress-bar" style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; cursor: pointer;">
+                    <div class="sc-progress-fill" id="player-progress-fill" style="height: 100%; background: var(--accent-blue); border-radius: 3px; width: 0%;"></div>
+                </div>
             </div>
         </div>
 
         <!-- Volume -->
         <div class="sc-volume">
-            <svg class="sc-volume-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M12.945 1.379l-.652.763c1.577 1.462 2.57 3.544 2.57 5.858s-.994 4.396-2.57 5.858l.651.763A8.966 8.966 0 0 0 16 8a8.966 8.966 0 0 0-3.055-6.621zM11.283 3.03l-.652.763A5.97 5.97 0 0 1 12.5 8a5.97 5.97 0 0 1-1.869 4.207l.652.763A6.964 6.964 0 0 0 13.5 8a6.964 6.964 0 0 0-2.217-4.97zM9.62 4.68l-.652.763A3.98 3.98 0 0 1 10 8a3.98 3.98 0 0 1-1.032 2.557l.652.763A4.975 4.975 0 0 0 11 8a4.975 4.975 0 0 0-1.38-3.32zM7 2L4 5H1v6h3l3 3V2z"/></svg>
-            <div class="sc-volume-bar">
-                <div class="sc-volume-fill"></div>
-            </div>
-        </div>
-
-        <!-- Track info -->
-        <div class="sc-track-info">
-            <div class="sc-art" id="player-art">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="#999"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-            </div>
-            <div class="sc-track-text">
-                <span class="sc-track-title" id="player-title">-</span>
-                <span class="sc-track-artist" id="player-artist">-</span>
+            <svg class="sc-volume-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <div class="sc-volume-bar" style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; cursor: pointer;">
+                <div class="sc-volume-fill" style="height: 100%; background: var(--text-primary); border-radius: 3px; width: 80%;"></div>
             </div>
         </div>
     </div>
@@ -454,6 +552,7 @@
                 }
                 
                 let playingItem = null;
+                window.currentQueue = data;
                 tbody.innerHTML = data.map((item, i) => {
                     if ((item.status || '').toLowerCase() === 'playing') {
                         playingItem = item;
@@ -770,6 +869,8 @@
         let _playerCurrentId = null;
         let _playerDuration = 0;
         let _playerStatusInterval = null;
+        let _repeatEnabled = false;
+        let _wasPlaying = false;
 
         function formatTime(totalSeconds) {
             const m = Math.floor(totalSeconds / 60);
@@ -799,9 +900,16 @@
                 if (res.volume !== undefined) {
                     if (typeof isDraggingVolume === 'undefined' || !isDraggingVolume) {
                         const volumeFill = document.querySelector('.sc-volume-fill');
-                        volumeFill.style.width = (res.volume * 100) + '%';
+                        if (volumeFill) {
+                            volumeFill.style.width = (res.volume * 100) + '%';
+                        }
                     }
                 }
+                
+                if (_wasPlaying && !res.is_playing && _repeatEnabled && _playerCurrentId) {
+                    updateReq(_playerCurrentId, 'play');
+                }
+                _wasPlaying = res.is_playing;
                 
                 const pauseIcon = document.getElementById('pause-icon');
                 const playIcon = document.getElementById('play-icon');
@@ -883,6 +991,35 @@
         }
 
         let _isPausedState = false;
+        document.getElementById('player-repeat-btn').addEventListener('click', () => {
+            _repeatEnabled = !_repeatEnabled;
+            document.getElementById('player-repeat-btn').classList.toggle('active', _repeatEnabled);
+            showToast(_repeatEnabled ? 'Repeat enabled' : 'Repeat disabled');
+        });
+
+        document.getElementById('player-prev-btn').addEventListener('click', () => {
+            if (!window.currentQueue) return;
+            const currentIdx = window.currentQueue.findIndex(i => i.id === _playerCurrentId);
+            if (currentIdx > 0) {
+                updateReq(window.currentQueue[currentIdx - 1].id, 'play');
+            } else {
+                showToast('Already at the beginning of the queue');
+            }
+        });
+
+        document.getElementById('player-next-btn').addEventListener('click', () => {
+            if (!window.currentQueue) return;
+            const currentIdx = window.currentQueue.findIndex(i => i.id === _playerCurrentId);
+            if (currentIdx >= 0 && currentIdx < window.currentQueue.length - 1) {
+                updateReq(window.currentQueue[currentIdx + 1].id, 'play');
+            } else if (window.currentQueue.length > 0 && currentIdx === -1) {
+                const nextItem = window.currentQueue.find(i => ['pending', 'approved'].includes((i.status || '').toLowerCase()));
+                if (nextItem) updateReq(nextItem.id, 'play');
+            } else {
+                showToast('No more tracks in queue');
+            }
+        });
+
         document.getElementById('player-pause-btn').addEventListener('click', async () => {
             try {
                 const res = await fetchAPI('/admin/api/player/pause', 'POST');
