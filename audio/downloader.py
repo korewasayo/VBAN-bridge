@@ -19,13 +19,31 @@ async def download_audio_task(query: str, request_id: int, user_id: Optional[int
         # Mark as pending initially (this is done in the route before spawning task)
         
         # Download audio
-        mp3_path, title, artist = await asyncio.to_thread(download_audio_sync, query)
+        mp3_path, title, artist, thumbnail_url = await asyncio.to_thread(download_audio_sync, query)
         
+        # If no thumbnail URL was returned, try to extract APIC from MP3
+        if mp3_path and not thumbnail_url:
+            try:
+                from mutagen.mp3 import MP3
+                from mutagen.id3 import ID3, APIC
+                audio = MP3(mp3_path, ID3=ID3)
+                if audio.tags:
+                    for tag in audio.tags.values():
+                        if isinstance(tag, APIC):
+                            os.makedirs("static/thumbnails", exist_ok=True)
+                            thumb_path = f"static/thumbnails/{request_id}.jpg"
+                            with open(thumb_path, "wb") as img:
+                                img.write(tag.data)
+                            thumbnail_url = f"/static/thumbnails/{request_id}.jpg"
+                            break
+            except Exception as e:
+                logger.warning(f"Could not extract thumbnail from {mp3_path}: {e}")
+
         # Update database with the new mp3 path, title, artist
         if mp3_path:
             await execute_query(
-                "UPDATE music_requests SET mp3_path = ?, title = ?, artist = ? WHERE id = ?",
-                (mp3_path, title, artist, request_id)
+                "UPDATE music_requests SET mp3_path = ?, title = ?, artist = ?, thumbnail_url = ? WHERE id = ?",
+                (mp3_path, title, artist, thumbnail_url, request_id)
             )
             logger.info(f"Successfully downloaded request {request_id} to {mp3_path}")
         else:
@@ -41,10 +59,10 @@ async def download_audio_task(query: str, request_id: int, user_id: Optional[int
         )
         await add_audit_log(user_id, "download_failed", f"Failed to download request {request_id}: {error_msg}", ip)
 
-def download_audio_sync(query: str) -> Tuple[str, str, str]:
+def download_audio_sync(query: str) -> Tuple[str, str, str, str]:
     """
     Downloads audio using yt-dlp or spotdl.
-    Returns a tuple of (file_path, title, artist).
+    Returns a tuple of (file_path, title, artist, thumbnail_url).
     Runs synchronously (meant to be run in a thread).
     """
     os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -70,12 +88,12 @@ def download_audio_sync(query: str) -> Tuple[str, str, str]:
                 # We can't easily extract title/artist from spotdl stdout without parsing,
                 # but we can just use the query as title for now or parse the filename if we had used default naming.
                 # Since we specified output, we'll just return generic title.
-                return final_path, "Spotify Download", ""
+                return final_path, "Spotify Download", "", ""
             else:
                 # Try to find any file that starts with file_id
                 for f in os.listdir(UPLOAD_DIR):
                     if f.startswith(file_id) and f.endswith(".mp3"):
-                        return os.path.join(UPLOAD_DIR, f), "Spotify Download", ""
+                        return os.path.join(UPLOAD_DIR, f), "Spotify Download", "", ""
                 raise Exception("spotdl finished but file not found.")
         except subprocess.CalledProcessError as e:
             logger.error(f"spotdl failed: {e.stderr}")
@@ -109,5 +127,6 @@ def download_audio_sync(query: str) -> Tuple[str, str, str]:
         
         title = info_dict.get('title', 'Unknown Title')
         artist = info_dict.get('uploader', info_dict.get('artist', 'Unknown Artist'))
+        thumbnail = info_dict.get('thumbnail', '')
         
-        return final_path, title, artist
+        return final_path, title, artist, thumbnail

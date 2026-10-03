@@ -112,6 +112,7 @@ TABLES_SQL = [
         reviewed_at TEXT,
         reject_reason TEXT,
         is_looping INTEGER NOT NULL DEFAULT 0,
+        thumbnail_url TEXT,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (reviewed_by) REFERENCES users(id)
     );
@@ -147,6 +148,12 @@ async def init_db() -> None:
     """Initialize the database by creating all tables if they do not exist."""
     for sql in TABLES_SQL:
         await execute_query(sql)
+    
+    # Migrations
+    try:
+        await execute_query("ALTER TABLE music_requests ADD COLUMN thumbnail_url TEXT;")
+    except Exception:
+        pass
 
     # Migration for older databases that predate the stricter guest-link model.
     for stmt in [

@@ -119,6 +119,26 @@ async def upload_request(request: Request, title: str = Form(...), artist: str =
             "INSERT INTO music_requests (user_id, title, artist, status, source_type, mp3_path, duration_seconds) VALUES (?, ?, ?, 'pending', 'upload', ?, ?)",
             (user_id, safe_title, safe_artist, saved_path, duration_seconds)
         )
+        
+        # Try to extract thumbnail from uploaded MP3
+        try:
+            from mutagen.mp3 import MP3
+            from mutagen.id3 import ID3, APIC
+            import os
+            audio = MP3(saved_path, ID3=ID3)
+            if audio.tags:
+                for tag in audio.tags.values():
+                    if isinstance(tag, APIC):
+                        os.makedirs("static/thumbnails", exist_ok=True)
+                        thumb_path = f"static/thumbnails/{request_id}.jpg"
+                        with open(thumb_path, "wb") as img:
+                            img.write(tag.data)
+                        thumbnail_url = f"/static/thumbnails/{request_id}.jpg"
+                        await execute_query("UPDATE music_requests SET thumbnail_url = ? WHERE id = ?", (thumbnail_url, request_id))
+                        break
+        except Exception:
+            pass
+
         ip = get_client_ip(request)
         await add_audit_log(user_id, "submit_upload", f"Uploaded mp3 request: {safe_title} by {safe_artist}", ip)
         return {"status": "success", "request_id": request_id}
@@ -129,14 +149,14 @@ async def upload_request(request: Request, title: str = Form(...), artist: str =
 @router.get("/api/requests/queue")
 async def get_queue(user: dict = Depends(require_permission("view_queue"))):
     requests = await fetch_all(
-        "SELECT id, title, artist, duration_seconds, status, source_type, created_at, is_looping FROM music_requests WHERE status IN ('pending', 'approved', 'playing') ORDER BY created_at ASC"
+        "SELECT id, title, artist, duration_seconds, status, source_type, created_at, is_looping, thumbnail_url FROM music_requests WHERE status IN ('pending', 'approved', 'playing') ORDER BY created_at ASC"
     )
     return [dict(r) for r in requests]
 
 @router.get("/admin/api/requests")
 async def admin_get_requests(status: str = None, user: dict = Depends(require_permission("manage_requests"))):
     query = """
-        SELECT r.id, r.title, r.artist, r.status, r.source_type, r.created_at, r.mp3_path, r.duration_seconds, r.is_looping,
+        SELECT r.id, r.title, r.artist, r.status, r.source_type, r.created_at, r.mp3_path, r.duration_seconds, r.is_looping, r.thumbnail_url,
                u.username as requested_by
         FROM music_requests r
         LEFT JOIN users u ON r.user_id = u.id
