@@ -962,7 +962,10 @@
                 }
                 
                 if (_wasPlaying && !res.is_playing && _repeatEnabled && _playerCurrentId) {
-                    updateReq(_playerCurrentId, 'play', true);
+                    // Only repeat if the track naturally ended (elapsed is close to duration)
+                    if (_playerDuration > 0 && _playerElapsedSeconds >= _playerDuration - 3) {
+                        updateReq(_playerCurrentId, 'play', true);
+                    }
                 }
                 _wasPlaying = res.is_playing;
                 
@@ -1079,6 +1082,7 @@
             if (!window.currentQueue) return;
             const currentIdx = window.currentQueue.findIndex(i => i.id === _playerCurrentId);
             if (currentIdx > 0) {
+                _playerElapsedSeconds = 0;
                 updateReq(window.currentQueue[currentIdx - 1].id, 'play', true);
             }
         });
@@ -1087,10 +1091,14 @@
             if (!window.currentQueue) return;
             const currentIdx = window.currentQueue.findIndex(i => i.id === _playerCurrentId);
             if (currentIdx >= 0 && currentIdx < window.currentQueue.length - 1) {
+                _playerElapsedSeconds = 0;
                 updateReq(window.currentQueue[currentIdx + 1].id, 'play', true);
             } else if (window.currentQueue.length > 0 && currentIdx === -1) {
                 const nextItem = window.currentQueue.find(i => ['pending', 'approved'].includes((i.status || '').toLowerCase()));
-                if (nextItem) updateReq(nextItem.id, 'play', true);
+                if (nextItem) {
+                    _playerElapsedSeconds = 0;
+                    updateReq(nextItem.id, 'play', true);
+                }
             }
         });
 
