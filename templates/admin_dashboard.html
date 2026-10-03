@@ -1036,7 +1036,7 @@
             
             const artEl = document.getElementById('player-art');
             if (item.thumbnail_url) {
-                artEl.innerHTML = `<img src="${item.thumbnail_url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;" alt="Cover Art" />`;
+                artEl.innerHTML = `<img src="${item.thumbnail_url}" referrerpolicy="no-referrer" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;" alt="Cover Art" onerror="this.outerHTML='<svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'currentColor\\'><path d=\\'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z\\'/></svg>'" />`;
             } else {
                 artEl.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>`;
             }
