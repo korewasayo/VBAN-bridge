@@ -16,7 +16,7 @@ import re
 import subprocess
 from html import escape
 from typing import Tuple, Optional, Dict
-from config import MAX_UPLOAD_SIZE_BYTES, UPLOAD_DIR, QUARANTINE_DIR, ALLOWED_EXTENSIONS
+from config import MAX_UPLOAD_SIZE_BYTES, UPLOAD_DIR, QUARANTINE_DIR, ALLOWED_EXTENSIONS, FFMPEG_PATH, FFPROBE_PATH
 
 # MP3 magic bytes
 MP3_MAGIC_BYTES = [
@@ -69,7 +69,7 @@ def extract_mp3_metadata(file_path: str) -> Dict[str, object]:
 
     try:
         cmd = [
-            'ffprobe',
+            FFPROBE_PATH or 'ffprobe',
             '-v', 'error',
             '-show_entries', 'format_tags=title,artist,album_artist:stream_tags=title,artist,album_artist:format=duration',
             '-of', 'json',
@@ -201,7 +201,7 @@ def save_mp3(file_data: bytes, original_filename: str) -> Tuple[Optional[str], s
             
         try:
             subprocess.run([
-                "ffmpeg", "-y", "-i", temp_input_path, 
+                FFMPEG_PATH or "ffmpeg", "-y", "-i", temp_input_path, 
                 "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", 
                 "-map_metadata", "-1", # Strip all metadata
                 save_path

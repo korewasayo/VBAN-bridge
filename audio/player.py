@@ -11,7 +11,7 @@ import socket
 import struct
 import threading
 from typing import Optional
-from config import FFPLAY_PATH
+from config import FFPLAY_PATH, FFMPEG_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,7 @@ class AudioPlayer:
         return cls._instance
     
     def _vban_emitter(self, file_path: str, start_time: float = 0.0):
-        # We assume FFPLAY_PATH is actually 'ffmpeg' or we just use 'ffmpeg'
-        # if the user hasn't overridden it, config.FFPLAY_PATH might be 'ffplay'
-        ffmpeg_cmd = "ffmpeg" if "ffplay" in FFPLAY_PATH.lower() else FFPLAY_PATH
+        ffmpeg_cmd = FFMPEG_PATH if FFMPEG_PATH else ("ffmpeg" if "ffplay" in FFPLAY_PATH.lower() else FFPLAY_PATH)
         
         cmd = [ffmpeg_cmd]
         

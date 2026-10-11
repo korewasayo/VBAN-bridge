@@ -7,7 +7,7 @@ import sys
 from typing import Optional, Tuple
 import yt_dlp
 
-from config import UPLOAD_DIR
+from config import UPLOAD_DIR, FFMPEG_LOCATION
 from database.db import execute_query
 from database.models import add_audit_log
 
@@ -102,6 +102,7 @@ def download_audio_sync(query: str) -> Tuple[str, str, str, str]:
     # For YouTube, SoundCloud, or Text Search, use yt-dlp
     ydl_opts = {
         'format': 'bestaudio/best',
+        'ffmpeg_location': FFMPEG_LOCATION,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
