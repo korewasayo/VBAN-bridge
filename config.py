@@ -1,8 +1,24 @@
 import os
 import shutil
+import sys
 from dotenv import load_dotenv
 
+# Ensure system error messages (e.g. WinError / Winsock) are formatted in English
+if sys.platform == "win32":
+    try:
+        import ctypes
+        MUI_LANGUAGE_NAME = 0x8
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetProcessPreferredUILanguages(MUI_LANGUAGE_NAME, ctypes.create_unicode_buffer("en-US\0"), None)
+        kernel32.SetThreadUILanguage(0x0409)
+    except Exception:
+        pass
+
+for env_var in ("LANG", "LANGUAGE", "LC_ALL"):
+    os.environ.setdefault(env_var, "en_US.UTF-8")
+
 load_dotenv()
+
 
 # --- SERVER CONFIGURATIONS ---
 UDP_IP = "0.0.0.0"

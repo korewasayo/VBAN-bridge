@@ -12,6 +12,16 @@ import sys
 import threading
 from contextlib import asynccontextmanager
 
+# Force Windows system error messages (FormatMessage / WinError) to English
+if sys.platform == "win32":
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetProcessPreferredUILanguages(0x8, ctypes.create_unicode_buffer("en-US\0"), None)
+        kernel32.SetThreadUILanguage(0x0409)
+    except Exception:
+        pass
+
 import uvicorn
 
 from config import (

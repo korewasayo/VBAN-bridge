@@ -90,6 +90,16 @@ def start_background_router():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024 * 1024)
     try:
         sock.bind((UDP_IP, UDP_PORT))
+    except OSError as e:
+        is_addr_in_use = getattr(e, "winerror", None) == 10048 or getattr(e, "errno", None) in (98, 10048)
+        if is_addr_in_use:
+            logger.error(
+                f"Failed to bind VBAN socket on port {UDP_PORT}: Address already in use ({e}). "
+                f"Another application (e.g. Voicemeeter or another instance) is already using UDP port {UDP_PORT}."
+            )
+        else:
+            logger.error(f"Failed to bind VBAN socket on port {UDP_PORT}: {e}")
+        return
     except Exception as e:
         logger.error(f"Failed to bind VBAN socket on port {UDP_PORT}: {e}")
         return

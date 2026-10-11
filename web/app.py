@@ -6,7 +6,7 @@ import os
 from typing import Callable
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import BASE_DIR
@@ -83,11 +83,20 @@ def create_application(lifespan: Callable) -> FastAPI:
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; "
+            "img-src 'self' data: blob: https:; "
+            "media-src 'self' blob:; "
             "connect-src 'self';"
         )
         response.headers["Content-Security-Policy"] = csp
         return response
+
+    # --- FAVICON ---
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        favicon_path = os.path.join(BASE_DIR, "static", "favicon.ico")
+        if os.path.exists(favicon_path):
+            return FileResponse(favicon_path, media_type="image/x-icon")
+        return Response(status_code=204)
 
     # --- STATIC FILES ---
     static_dir = os.path.join(BASE_DIR, "static")
