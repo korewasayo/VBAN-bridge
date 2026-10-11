@@ -26,6 +26,8 @@ cp .env.example .env
 ```
 Set `SUPER_ADMIN_PASSWORD` to a unique password of at least 12 characters. The server refuses to start with a missing or known default password. The web listener binds to `127.0.0.1` by default so a local Cloudflare Tunnel can reach it without exposing the port directly.
 
+To route outbound audio-provider requests through proxies, set `DOWNLOADER_PROXIES` in `.env` to a comma-separated list of HTTP(S) proxy URLs. The downloader tries them in order and switches to the next when a request fails. The old single `DOWNLOADER_PROXY` setting remains supported. Use providers you trust: each proxy can see the requests it forwards. Public free proxies are not bundled because their operators and handling of traffic cannot be trusted; this setting also does not proxy web visitors' connections or hide the server from other traffic.
+
 ### 3. Run the Server
 ```bash
 python server.py

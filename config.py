@@ -42,6 +42,11 @@ MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ALLOWED_EXTENSIONS = {".mp3"}
 
 # --- AUDIO / FFMPEG CONFIGURATION ---
+_downloader_proxy_values = os.environ.get("DOWNLOADER_PROXIES", "").strip()
+if not _downloader_proxy_values:
+    _downloader_proxy_values = os.environ.get("DOWNLOADER_PROXY", "").strip()
+DOWNLOADER_PROXIES = tuple(proxy.strip() for proxy in _downloader_proxy_values.split(",") if proxy.strip())
+
 def _resolve_ffmpeg_binaries():
     ffmpeg_env = os.environ.get("FFMPEG_PATH", "").strip()
     ffmpeg_bin = None

@@ -45,6 +45,8 @@ class AudioPlayer:
                 headers = "".join(f"{key}: {value}\r\n" for key, value in media["http_headers"].items())
                 if headers:
                     cmd.extend(["-headers", headers])
+                if media.get("proxy"):
+                    cmd.extend(["-http_proxy", media["proxy"]])
                 cmd.extend(["-i", media["url"]])
             except Exception as e:
                 logger.error(f"Could not resolve live audio source: {e}")
