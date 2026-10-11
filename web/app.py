@@ -3,6 +3,8 @@
 Sets up middleware, mounts routers, serves static files and templates.
 """
 import os
+import logging
+import re
 from typing import Callable
 
 from fastapi import FastAPI, Request
@@ -10,16 +12,15 @@ from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import BASE_DIR
+from database.models import add_audit_log
+from security.client_ip import get_client_ip
 from security.rate_limiter import rate_limiter
 
+security_logger = logging.getLogger("security.events")
 
-def get_client_ip(request: Request) -> str:
-    """Extract real client IP, accounting for Cloudflare and reverse proxies."""
-    return (
-        request.headers.get("CF-Connecting-IP")
-        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or request.client.host
-    )
+
+def _safe_log_field(value: str, max_length: int = 200) -> str:
+    return re.sub(r"[^A-Za-z0-9_.:/-]", "_", str(value))[:max_length]
 
 
 def create_application(lifespan: Callable) -> FastAPI:
@@ -37,11 +38,28 @@ def create_application(lifespan: Callable) -> FastAPI:
     @app.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):
         """Rate limit by client IP."""
-        if request.url.path.startswith("/admin/api/"):
-            return await call_next(request)
-            
         client_ip = get_client_ip(request)
         if not rate_limiter.is_allowed(client_ip):
+            if rate_limiter.should_log_rejection(client_ip):
+                security_logger.warning(
+                    "SECURITY_EVENT category=rate_limit ip=%s method=%s path=%s reason=request_limit",
+                    _safe_log_field(client_ip),
+                    _safe_log_field(request.method),
+                    _safe_log_field(request.url.path),
+                )
+                try:
+                    await add_audit_log(
+                        None,
+                        "rate_limit",
+                        "Request rejected by the IP rate limiter",
+                        client_ip,
+                        category="security",
+                        request_method=request.method[:16],
+                        request_path=request.url.path[:512],
+                        user_agent=request.headers.get("User-Agent", "")[:512],
+                    )
+                except Exception:
+                    security_logger.exception("Could not persist rate-limit event")
             return HTMLResponse("Rate limit exceeded. Please wait.", status_code=429)
         response = await call_next(request)
         return response

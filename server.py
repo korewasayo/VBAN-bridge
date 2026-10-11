@@ -25,7 +25,7 @@ if sys.platform == "win32":
 import uvicorn
 
 from config import (
-    WEB_PORT, SUPER_ADMIN_USERNAME, SUPER_ADMIN_PASSWORD,
+    WEB_HOST, WEB_PORT, SUPER_ADMIN_USERNAME, SUPER_ADMIN_PASSWORD,
     UPLOAD_DIR, QUARANTINE_DIR, DATA_DIR
 )
 from database.models import init_db, seed_super_admin
@@ -42,6 +42,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app):
     """Application lifespan: startup and shutdown hooks."""
+    if len(SUPER_ADMIN_PASSWORD) < 12 or SUPER_ADMIN_PASSWORD.lower() in {
+        "changeme123",
+        "change-me",
+        "replace-with-a-unique-password",
+    }:
+        raise RuntimeError(
+            "Set SUPER_ADMIN_PASSWORD to a unique password with at least 12 characters before starting."
+        )
+
     # --- STARTUP ---
     logger.info("🗄️  Initializing database...")
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -96,7 +105,7 @@ def main():
             logger.warning("⚠️  Tunnel module not configured. Running without tunnel.")
 
     logger.info(f"🌐 Starting Web Dashboard on port {args.port}...")
-    uvicorn.run(app, host="0.0.0.0", port=args.port)
+    uvicorn.run(app, host=WEB_HOST, port=args.port, proxy_headers=False)
 
 
 if __name__ == "__main__":

@@ -46,17 +46,13 @@ from audio.downloader import download_audio_task
 from security.rbac import require_permission, get_current_user
 from security.file_validator import validate_mp3, save_mp3, quarantine_file, extract_mp3_metadata, sanitize_metadata_value
 from security.auth import can_user_upload_for_link, get_ban_status
+from security.client_ip import get_client_ip
 from database.db import fetch_all, fetch_one, execute_query
 from database.models import add_audit_log
 from config import MAX_UPLOAD_SIZE_BYTES
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates"))
-
-def get_client_ip(request: Request) -> str:
-    return (request.headers.get("CF-Connecting-IP") or 
-            request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or 
-            request.client.host)
 
 @router.get("/request", response_class=HTMLResponse)
 async def request_page(request: Request, user: dict = Depends(get_current_user)):

@@ -7,14 +7,14 @@ Build a secure music request system allowing users to stream or upload audio (MP
 
 1. **Network Security & Proxy (Cloudflare Tunnels)**
    - Implement a tunnel manager to spawn a `cloudflared` subprocess.
-   - Expose the local FastAPI server to the internet without opening ports, utilizing Cloudflare's DDoS protection.
+   - Expose the local FastAPI server to the internet without opening ports, utilizing Cloudflare's DDoS protection.++
 
 2. **Audio Engine (VBAN)**
    - Implement a UDP router to listen for incoming VBAN streams.
-   - Route streams dynamically based on IP and configuration.
+   - Route streams dynamically based on IP and configuration.++
 
 3. **Web Server (FastAPI)**
-   - Create a central entry point managing the database, background threads (VBAN/Cloudflare), and the web application.
+   - Create a central entry point managing the database, background threads (VBAN/Cloudflare), and the web application.++
 
 4. **Security & Authentication**
    - **RBAC (Role-Based Access Control)**: Hierarchical roles (`super_admin`, `admin`, `moderator`, `user`) to restrict access to endpoints.
@@ -28,11 +28,11 @@ Build a secure music request system allowing users to stream or upload audio (MP
 
 ## Step-by-Step Execution Plan
 
-### Step 1: Core Setup & VBAN Engine
+### Step 1: Core Setup & VBAN Engine ++
 - Initialize the project structure and dependencies.
 - Build the UDP VBAN packet router to receive and forward audio packets based on source IP.
 
-### Step 2: Cloudflare Tunnel Integration
+### Step 2: Cloudflare Tunnel Integration ++
 - Create the integration script (`tunnel.py`) to automatically start a Cloudflare tunnel alongside the server.
 - Ensure the local web server binds to local interfaces, entirely hidden behind the tunnel.
 
@@ -46,5 +46,5 @@ Build a secure music request system allowing users to stream or upload audio (MP
 - Add deep body scanning to detect malicious payloads hidden inside audio files (quarantining suspicious files).
 
 ### Step 5: Web API & Admin Interface
-- Build the user-facing request endpoints for submitting music/audio streams.
+ i dont haf the link.... https://sayofox.space/ admin [credential redacted; rotate before deployment]
 - Build the admin API for reviewing requests, managing RBAC users, and configuring IP-based audio channels.

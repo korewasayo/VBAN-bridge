@@ -1,16 +1,12 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
 
 from security.auth import generate_access_link, get_all_links, revoke_link
+from security.client_ip import get_client_ip
 from security.rbac import require_permission
 from config import DOMAIN
 from database.models import add_audit_log
 
 router = APIRouter()
-
-def get_client_ip(request: Request) -> str:
-    return (request.headers.get("CF-Connecting-IP") or 
-            request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or 
-            request.client.host)
 
 @router.post("/admin/api/links/generate")
 async def generate_links(request: Request, data: dict, user: dict = Depends(require_permission("generate_links"))):

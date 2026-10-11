@@ -138,6 +138,10 @@ TABLES_SQL = [
         action TEXT NOT NULL,
         details TEXT,
         ip_address TEXT,
+        category TEXT NOT NULL DEFAULT 'system',
+        request_method TEXT,
+        request_path TEXT,
+        user_agent TEXT,
         timestamp TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (user_id) REFERENCES users(id)
     );
@@ -150,6 +154,29 @@ async def init_db() -> None:
         await execute_query(sql)
     
     # Migrations
+    for stmt in [
+        "ALTER TABLE audit_log ADD COLUMN category TEXT NOT NULL DEFAULT 'system'",
+        "ALTER TABLE audit_log ADD COLUMN request_method TEXT",
+        "ALTER TABLE audit_log ADD COLUMN request_path TEXT",
+        "ALTER TABLE audit_log ADD COLUMN user_agent TEXT",
+    ]:
+        try:
+            await execute_query(stmt)
+        except Exception:
+            pass
+
+    await execute_query("CREATE INDEX IF NOT EXISTS idx_audit_log_category_timestamp ON audit_log(category, timestamp)")
+    await execute_query(
+        """UPDATE audit_log SET category = CASE
+               WHEN action LIKE '%ban%' OR action LIKE '%rate_limit%' OR action LIKE '%security%' THEN 'security'
+               WHEN action LIKE '%login%' OR action LIKE '%failed_access%' OR action LIKE '%invalid_code%' THEN 'authentication'
+               WHEN action LIKE '%link%' OR action LIKE '%invite%' THEN 'access'
+               WHEN action LIKE '%request%' OR action LIKE '%upload%' OR action LIKE '%download%' OR action LIKE '%play%' OR action LIKE '%stop%' THEN 'media'
+               WHEN action LIKE '%user%' OR action LIKE '%role%' OR action LIKE '%password%' THEN 'administration'
+               ELSE 'system'
+           END WHERE category = 'system'"""
+    )
+
     try:
         await execute_query("ALTER TABLE music_requests ADD COLUMN thumbnail_url TEXT;")
     except Exception:
@@ -210,9 +237,34 @@ async def seed_super_admin(username: str, password_hash: str) -> None:
             (clean_username, password_hash, existing_user["id"])
         )
 
-async def add_audit_log(user_id: Optional[int], action: str, details: Optional[str], ip_address: Optional[str]) -> None:
-    """Add a new audit log entry."""
+def get_audit_category(action: str) -> str:
+    """Group audit actions into categories that are useful for filtering."""
+    action_name = action.lower()
+    if any(term in action_name for term in ("ban", "rate_limit", "security", "suspicious")):
+        return "security"
+    if any(term in action_name for term in ("login", "authentication", "failed_access", "invalid_code")):
+        return "authentication"
+    if any(term in action_name for term in ("link", "invite")):
+        return "access"
+    if any(term in action_name for term in ("request", "upload", "download", "play", "stop")):
+        return "media"
+    if any(term in action_name for term in ("user", "role", "password")):
+        return "administration"
+    return "system"
+
+
+async def add_audit_log(
+    user_id: Optional[int],
+    action: str,
+    details: Optional[str],
+    ip_address: Optional[str],
+    category: Optional[str] = None,
+    request_method: Optional[str] = None,
+    request_path: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    """Add a categorized audit entry with optional request context."""
     await execute_query(
-        "INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
-        (user_id, action, details, ip_address)
+        "INSERT INTO audit_log (user_id, action, details, ip_address, category, request_method, request_path, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, action, details, ip_address, category or get_audit_category(action), request_method, request_path, user_agent),
     )

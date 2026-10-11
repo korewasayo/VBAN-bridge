@@ -2,6 +2,7 @@
 from functools import wraps
 from fastapi import Request, HTTPException, Cookie
 from typing import Optional
+from security.client_ip import get_client_ip
 
 # Role hierarchy: higher roles inherit lower role permissions
 ROLE_HIERARCHY = {
@@ -59,14 +60,7 @@ async def get_current_user(request: Request) -> Optional[dict]:
     if not token:
         return None
     
-    # Get real client IP (Cloudflare sends CF-Connecting-IP)
-    client_ip = (
-        request.headers.get("CF-Connecting-IP")
-        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or request.client.host
-    )
-    
-    user = await get_session_user(token, client_ip)
+    user = await get_session_user(token, get_client_ip(request))
     return user
 
 

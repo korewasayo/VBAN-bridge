@@ -24,6 +24,7 @@ load_dotenv()
 UDP_IP = "0.0.0.0"
 UDP_PORT = int(os.environ.get("UDP_PORT", 6980))
 WEB_PORT = int(os.environ.get("WEB_PORT", 8000))
+WEB_HOST = os.environ.get("WEB_HOST", "127.0.0.1")
 CONFIG_FILE = "vban_config.json"
 
 # --- DATABASE ---
@@ -130,9 +131,9 @@ MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", 60))
 LINK_EXPIRY_MINUTES = int(os.environ.get("LINK_EXPIRY_MINUTES", 10))
 
 # --- ADMIN CREDENTIALS ---
-ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "super-secret-admin-key-change-me")
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
 SUPER_ADMIN_USERNAME = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-SUPER_ADMIN_PASSWORD = os.environ.get("SUPER_ADMIN_PASSWORD", "changeme123")
+SUPER_ADMIN_PASSWORD = os.environ.get("SUPER_ADMIN_PASSWORD", "")
 
 # --- CLOUDFLARE ---
 CLOUDFLARE_TUNNEL_TOKEN = os.environ.get("CLOUDFLARE_TUNNEL_TOKEN", "")

@@ -7,3 +7,4 @@ vban_config.json
 .env
 __pycache__/
 *.pyc
+chat

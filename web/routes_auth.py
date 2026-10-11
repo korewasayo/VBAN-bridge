@@ -5,20 +5,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from security.auth import validate_and_consume_link, get_ban_status, register_failed_access
+from security.client_ip import get_client_ip
 from security.tokens import generate_session_token, invalidate_token
-from security.passwords import verify_password, hash_password
+from security.passwords import verify_password
 from database.db import fetch_one, execute_query
 from database.models import add_audit_log
-from config import SUPER_ADMIN_USERNAME, SUPER_ADMIN_PASSWORD
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates"))
-
-def get_client_ip(request: Request) -> str:
-    return (request.headers.get("CF-Connecting-IP") or 
-            request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or 
-            request.client.host)
-
 
 def get_user_agent(request: Request) -> str:
     return request.headers.get("User-Agent", "")
@@ -64,7 +58,13 @@ async def login_page(request: Request, token: str = None, code: str = None):
                 await add_audit_log(user_id, "guest_login", "Logged in via invite code", ip)
                 return response
 
-            await register_failed_access(ip_address=ip, reason="invalid_login_code")
+            await register_failed_access(
+                ip_address=ip,
+                reason="invalid_login_code",
+                request_method=request.method,
+                request_path=request.url.path,
+                user_agent=get_user_agent(request),
+            )
         else:
             guest_username = f"guest_{secrets.token_hex(4)}"
             user_id = await execute_query(
@@ -86,24 +86,23 @@ async def admin_login_page(request: Request):
 
 @router.post("/admin/login")
 async def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
+    ip = get_client_ip(request)
+    if await get_ban_status(ip_address=ip):
+        return templates.TemplateResponse(
+            "admin_login.html",
+            {"request": request, "error": "Your access is temporarily blocked."},
+            status_code=403,
+        )
+
     clean_username = username.strip()
     user = await fetch_one(
         "SELECT id, username, password_hash, role, is_active FROM users WHERE LOWER(username) = LOWER(?)",
         (clean_username,)
     )
-    ip = get_client_ip(request)
     
     is_valid = False
     if user and user["is_active"]:
-        if verify_password(password, user["password_hash"]):
-            is_valid = True
-        elif user["role"] == "super_admin" or clean_username.lower() == SUPER_ADMIN_USERNAME.lower():
-            # Support configured password or standard defaults, and auto-sync to DB
-            accepted = {SUPER_ADMIN_PASSWORD, "changeme123", "change-me"}
-            if password in accepted:
-                is_valid = True
-                new_hash = hash_password(password)
-                await execute_query("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user["id"]))
+        is_valid = verify_password(password, user["password_hash"])
 
     if is_valid:
         session_token = await generate_session_token(user["id"], ip)
@@ -112,7 +111,16 @@ async def admin_login(request: Request, username: str = Form(...), password: str
         await add_audit_log(user["id"], "admin_login", "Admin login successful", ip)
         return response
     
-    await add_audit_log(None, "admin_login_failed", f"Failed login attempt for {clean_username}", ip)
+    safe_username = "".join(char for char in clean_username if char.isprintable())[:120]
+    await register_failed_access(
+        user_id=user["id"] if user else None,
+        ip_address=ip,
+        reason="admin_login_failed",
+        request_method=request.method,
+        request_path=request.url.path,
+        user_agent=get_user_agent(request),
+        details=f"Failed administrator login for username: {safe_username}",
+    )
     return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid username or password"})
 
 @router.post("/login")
@@ -161,7 +169,13 @@ async def legacy_login(request: Request, token: str = Form(None), code: str = Fo
         await add_audit_log(user_id, "guest_login", "Logged in via invite code form", ip)
         return response
 
-    await register_failed_access(ip_address=ip, reason="invalid_login_code")
+    await register_failed_access(
+        ip_address=ip,
+        reason="invalid_login_code",
+        request_method=request.method,
+        request_path=request.url.path,
+        user_agent=get_user_agent(request),
+    )
     return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid or expired token or code"})
 
 @router.get("/logout")

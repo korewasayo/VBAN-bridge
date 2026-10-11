@@ -1,0 +1,8 @@
+[vban-bridge]
+enabled = false
+filter = vban-bridge
+backend = systemd
+journalmatch = _SYSTEMD_UNIT=vban-bridge.service
+maxretry = 5
+findtime = 10m
+bantime = 30m

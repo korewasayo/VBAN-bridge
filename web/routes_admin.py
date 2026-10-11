@@ -8,14 +8,10 @@ from database.db import fetch_all, fetch_one, execute_query
 from database.models import add_audit_log
 from security.passwords import hash_password
 from security.auth import create_manual_ban, generate_invite_code, validate_invite_code
+from security.client_ip import get_client_ip
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates"))
-
-def get_client_ip(request: Request) -> str:
-    return (request.headers.get("CF-Connecting-IP") or 
-            request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or 
-            request.client.host)
 
 @router.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, user: dict = Depends(require_role("admin", "super_admin"))):
@@ -79,14 +75,38 @@ async def change_user_password(request: Request, user_id: int, data: dict, user:
     return {"status": "success"}
 
 @router.get("/admin/api/audit-log")
-async def get_audit_log(user: dict = Depends(require_role("admin", "super_admin"))):
-    logs = await fetch_all('''
-        SELECT a.id, a.user_id, u.username, a.action, a.details, a.ip_address, a.timestamp 
+async def get_audit_log(
+    category: str = "",
+    search: str = "",
+    limit: int = 100,
+    user: dict = Depends(require_role("admin", "super_admin")),
+):
+    allowed_categories = {"authentication", "security", "access", "media", "administration", "system"}
+    if category and category not in allowed_categories:
+        raise HTTPException(status_code=400, detail="Unknown audit category")
+
+    conditions = []
+    params = []
+    if category:
+        conditions.append("a.category = ?")
+        params.append(category)
+    search = search.strip()[:128]
+    if search:
+        conditions.append("(u.username LIKE ? OR a.action LIKE ? OR a.details LIKE ? OR a.ip_address LIKE ? OR a.request_path LIKE ? OR a.user_agent LIKE ?)")
+        pattern = f"%{search}%"
+        params.extend([pattern] * 6)
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    params.append(max(1, min(limit, 500)))
+
+    logs = await fetch_all(f'''
+        SELECT a.id, a.user_id, u.username, a.category, a.action, a.details,
+               a.ip_address, a.request_method, a.request_path, a.user_agent, a.timestamp
         FROM audit_log a 
         LEFT JOIN users u ON a.user_id = u.id 
-        ORDER BY a.timestamp DESC 
-        LIMIT 200
-    ''')
+        {where_clause}
+        ORDER BY a.timestamp DESC
+        LIMIT ?
+    ''', tuple(params))
     return [dict(row) for row in logs]
 
 @router.get("/admin/api/bans")
