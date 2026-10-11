@@ -6,6 +6,7 @@ A web-based music request system built on top of VBAN audio routing. Users acces
 - 🔊 VBAN audio routing between network devices
 - 🎶 Music request queue (FIFO)
 - 📤 MP3 file upload with multi-layer security validation
+- 🎞️ Video-link audio extraction and direct live-stream audio playback over VBAN
 - 🔐 Role-Based Access Control (Super Admin, Admin, Moderator, User)
 - 🔗 One-time access links (single-use, auto-expiring)
 - 🌐 Cloudflare Tunnel integration (IP hidden, DDoS protected)
@@ -50,3 +51,5 @@ The server binds to loopback by default. Set `WEB_HOST=0.0.0.0` only when direct
 - **Audio**: VBAN UDP protocol + ffplay for MP3 playback
 - **Security**: RBAC, one-time links, rate limiting, file validation
 - **Tunnel**: Cloudflare Tunnel (cloudflared)
+
+Video links are converted to MP3 audio for the queue. Active live links are resolved when requested and streamed through FFmpeg to VBAN; the admin dashboard can also monitor them in-browser. Live streams have no seek or fixed duration. A source reported as unavailable by its provider must be accessible to the server; updating yt-dlp may resolve extractor changes, but cannot make private, deleted, or region-blocked media available.

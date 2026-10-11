@@ -624,7 +624,7 @@
                         <td style="color: var(--text-secondary); width: 40px; text-align: center;">${item.id}</td>
                         <td style="font-weight: 600; color: ${status === 'playing' ? 'var(--accent-green)' : 'var(--text-primary)'}; cursor: pointer;" onclick="updateReq('${item.id}', 'play')" title="Click to play">${item.title || '-'}</td>
                         <td style="color: var(--text-secondary); cursor: pointer;" onclick="updateReq('${item.id}', 'play')" title="Click to play">${item.artist || '-'}</td>
-                        <td style="color: var(--text-secondary); font-size: 0.9em;">${item.source_type || '-'}</td>
+                        <td style="color: var(--text-secondary); font-size: 0.9em;">${item.source_url ? 'Live stream' : (item.source_type || '-')}</td>
                         <td><span class="badge ${getBadgeClass(item.status)}">${item.status}</span></td>
                         <td style="color: var(--text-secondary); font-size: 0.9em;">${item.requested_by || 'Unknown'}</td>
                         <td style="color: var(--text-secondary); font-size: 0.85em;">${new Date(item.created_at).toLocaleString()}</td>
@@ -976,7 +976,7 @@
             try {
                 const res = await fetchAPI('/admin/api/player/status');
                 _playerDuration = res.duration || 0;
-                document.getElementById('player-duration').textContent = formatTime(Math.floor(_playerDuration));
+                document.getElementById('player-duration').textContent = res.is_live ? 'LIVE' : formatTime(Math.floor(_playerDuration));
                 
                 if (res.elapsed !== undefined) {
                     // Sync the client side elapsed time with the server
@@ -991,7 +991,7 @@
                     }
                     
                     if (_monitorEnabled && res.is_playing) {
-                        if (Math.abs(_monitorAudio.currentTime - res.elapsed) > 2.0) {
+                        if (!res.is_live && Math.abs(_monitorAudio.currentTime - res.elapsed) > 2.0) {
                             _monitorAudio.currentTime = res.elapsed;
                         }
                     }
@@ -1010,7 +1010,7 @@
                 
                 if (_wasPlaying && !res.is_playing && _playerCurrentId) {
                     // Only advance/repeat if the track naturally ended
-                    if (_playerDuration > 0 && _playerElapsedSeconds >= _playerDuration - 3) {
+                    if (res.is_live || (_playerDuration > 0 && _playerElapsedSeconds >= _playerDuration - 3)) {
                         if (_repeatEnabled) {
                             updateReq(_playerCurrentId, 'play', true);
                         } else {

@@ -1,4 +1,5 @@
 import os
+import asyncio
 from fastapi import APIRouter, Request, Depends, HTTPException, Form, UploadFile, File, BackgroundTasks, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -49,7 +50,7 @@ from security.auth import can_user_upload_for_link, get_ban_status
 from security.client_ip import get_client_ip
 from database.db import fetch_all, fetch_one, execute_query
 from database.models import add_audit_log
-from config import MAX_UPLOAD_SIZE_BYTES
+from config import FFMPEG_PATH, MAX_UPLOAD_SIZE_BYTES
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates"))
@@ -153,6 +154,7 @@ async def get_queue(user: dict = Depends(require_permission("view_queue"))):
 async def admin_get_requests(status: str = None, user: dict = Depends(require_permission("manage_requests"))):
     query = """
         SELECT r.id, r.title, r.artist, r.status, r.source_type, r.created_at, r.mp3_path, r.duration_seconds, r.is_looping, r.thumbnail_url,
+             r.source_url,
                u.username as requested_by
         FROM music_requests r
         LEFT JOIN users u ON r.user_id = u.id
@@ -189,16 +191,22 @@ async def reject_request(request: Request, request_id: int, data: dict, user: di
 
 @router.post("/admin/api/requests/{request_id}/play")
 async def play_request(request: Request, request_id: int, user: dict = Depends(require_permission("manage_requests"))):
-    await execute_query("UPDATE music_requests SET status = 'played' WHERE status = 'playing'")
+    req = await fetch_one("SELECT mp3_path, source_url FROM music_requests WHERE id = ?", (request_id,))
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    from audio.player import player
+    if req["source_url"]:
+        started = player.play_live(req["source_url"])
+    elif req["mp3_path"]:
+        started = player.play(req["mp3_path"])
+    else:
+        started = False
+    if not started:
+        raise HTTPException(status_code=400, detail="This request has no playable audio source")
+
+    await execute_query("UPDATE music_requests SET status = 'played' WHERE status = 'playing' AND id != ?", (request_id,))
     await execute_query("UPDATE music_requests SET status = 'playing' WHERE id = ?", (request_id,))
-    
-    req = await fetch_one("SELECT mp3_path FROM music_requests WHERE id = ?", (request_id,))
-    if req and req["mp3_path"]:
-        try:
-            from audio.player import player
-            player.play(req["mp3_path"])
-        except Exception:
-            pass
             
     ip = get_client_ip(request)
     await add_audit_log(user["id"], "play_request", f"Playing request {request_id}", ip)
@@ -220,7 +228,42 @@ async def stop_request(request: Request, request_id: int, user: dict = Depends(r
 
 @router.get("/admin/api/requests/{request_id}/audio")
 async def stream_audio_request(request: Request, request_id: int, user: dict = Depends(require_permission("view_dashboard"))):
-    req = await fetch_one("SELECT mp3_path FROM music_requests WHERE id = ?", (request_id,))
+    req = await fetch_one("SELECT mp3_path, source_url FROM music_requests WHERE id = ?", (request_id,))
+    if req and req["source_url"]:
+        try:
+            from audio.downloader import extract_media_url
+            media = await asyncio.to_thread(extract_media_url, req["source_url"])
+            command = [FFMPEG_PATH]
+            headers = "".join(f"{key}: {value}\r\n" for key, value in media["http_headers"].items())
+            if headers:
+                command.extend(["-headers", headers])
+            command.extend([
+                "-i", media["url"], "-vn", "-codec:a", "libmp3lame",
+                "-b:a", "128k", "-f", "mp3", "pipe:1",
+            ])
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Could not open live audio monitor: {exc}") from exc
+
+        async def live_audio_chunks():
+            try:
+                while chunk := await process.stdout.read(16384):
+                    yield chunk
+            finally:
+                if process.returncode is None:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=3)
+                    except asyncio.TimeoutError:
+                        process.kill()
+                        await process.wait()
+
+        return StreamingResponse(live_audio_chunks(), media_type="audio/mpeg")
+
     if req and req["mp3_path"] and os.path.exists(req["mp3_path"]):
         return range_requests_response(request, req["mp3_path"], "audio/mpeg")
     raise HTTPException(status_code=404, detail="Audio file not found")
@@ -283,15 +326,18 @@ async def advance_player(request: Request, user: dict = Depends(require_permissi
                 await execute_query("UPDATE music_requests SET status = 'played' WHERE id = ?", (current_playing["id"],))
                 
         # Find next approved
-        next_req = await fetch_one("SELECT id, mp3_path FROM music_requests WHERE status = 'approved' ORDER BY created_at ASC LIMIT 1")
+        next_req = await fetch_one("SELECT id, mp3_path, source_url FROM music_requests WHERE status = 'approved' ORDER BY created_at ASC LIMIT 1")
         if not next_req and current_playing:
             # Fallback: find the next chronological request that is not rejected
-            next_req = await fetch_one("SELECT id, mp3_path FROM music_requests WHERE id > ? AND status != 'rejected' ORDER BY id ASC LIMIT 1", (current_playing["id"],))
+            next_req = await fetch_one("SELECT id, mp3_path, source_url FROM music_requests WHERE id > ? AND status != 'rejected' ORDER BY id ASC LIMIT 1", (current_playing["id"],))
         if next_req:
             # Mark it playing
             await execute_query("UPDATE music_requests SET status = 'playing' WHERE id = ?", (next_req["id"],))
             # Start player
-            success = player.play(next_req["mp3_path"])
+            if next_req["source_url"]:
+                success = player.play_live(next_req["source_url"])
+            else:
+                success = player.play(next_req["mp3_path"])
             if not success:
                 await execute_query("UPDATE music_requests SET status = 'rejected', reject_reason = 'Failed to play audio' WHERE id = ?", (next_req["id"],))
                 raise HTTPException(status_code=500, detail="Failed to play the next audio file via VBAN.")

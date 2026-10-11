@@ -1,4 +1,4 @@
-"""Audio player using ffmpeg for MP3 playback over VBAN.
+"""Audio player using ffmpeg for file and live audio playback over VBAN.
 
 Manages a single ffmpeg subprocess. Only one track plays at a time.
 When a new track is requested, the current one is stopped first.
@@ -26,24 +26,36 @@ class AudioPlayer:
     _is_paused: bool = False
     _volume: float = 0.8
     _duration: float = 0.0
+    _is_live: bool = False
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
     
-    def _vban_emitter(self, file_path: str, start_time: float = 0.0):
+    def _vban_emitter(self, file_path: str, start_time: float = 0.0, is_live: bool = False):
         ffmpeg_cmd = FFMPEG_PATH if FFMPEG_PATH else ("ffmpeg" if "ffplay" in FFPLAY_PATH.lower() else FFPLAY_PATH)
         
         cmd = [ffmpeg_cmd]
-        
-        if start_time > 0:
-            cmd.extend(["-fflags", "+fastseek", "-noaccurate_seek", "-ss", str(start_time)])
-            
-        cmd.extend([
-            "-re", "-i", file_path,
-            "-f", "s16le", "-ar", "48000", "-ac", "2", "-loglevel", "quiet", "-"
-        ])
+
+        if is_live:
+            try:
+                from audio.downloader import extract_media_url
+                media = extract_media_url(file_path)
+                headers = "".join(f"{key}: {value}\r\n" for key, value in media["http_headers"].items())
+                if headers:
+                    cmd.extend(["-headers", headers])
+                cmd.extend(["-i", media["url"]])
+            except Exception as e:
+                logger.error(f"Could not resolve live audio source: {e}")
+                self._is_playing = False
+                return
+        else:
+            if start_time > 0:
+                cmd.extend(["-fflags", "+fastseek", "-noaccurate_seek", "-ss", str(start_time)])
+            cmd.extend(["-re", "-i", file_path])
+
+        cmd.extend(["-f", "s16le", "-ar", "48000", "-ac", "2", "-loglevel", "quiet", "-"])
         
         try:
             local_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -137,6 +149,7 @@ class AudioPlayer:
         
         # Stop current playback
         self.stop()
+        self._is_live = False
         
         if start_time == 0.0:
             try:
@@ -163,10 +176,34 @@ class AudioPlayer:
         self._thread.start()
         
         return True
+
+    def play_live(self, source_url: str) -> bool:
+        """Resolve and play an active webpage live stream directly to VBAN."""
+        if not source_url.startswith(("https://", "http://")):
+            logger.error("Live source must be an HTTP(S) webpage URL.")
+            return False
+
+        self.stop()
+        self._duration = 0.0
+        self._start_time = 0.0
+        self._pause_start = 0
+        self._total_paused_time = 0
+        self._current_file = source_url
+        self._is_live = True
+        self._is_playing = True
+        logger.info("Starting live audio stream over VBAN.")
+        self._thread = threading.Thread(
+            target=self._vban_emitter,
+            args=(source_url, 0.0, True),
+            daemon=True,
+        )
+        self._thread.start()
+        return True
     
     def stop(self) -> None:
         """Stop current playback."""
         self._is_playing = False
+        self._is_live = False
         self._is_paused = False
         self._start_time = 0
         self._pause_start = 0
@@ -238,6 +275,7 @@ class AudioPlayer:
         return {
             "is_playing": self.is_playing,
             "is_paused": self.is_paused,
+            "is_live": self._is_live,
             "volume": self.volume,
             "duration": self._duration,
             "elapsed": self.get_elapsed(),

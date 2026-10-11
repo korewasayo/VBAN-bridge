@@ -105,6 +105,7 @@ TABLES_SQL = [
         artist TEXT DEFAULT '',
         status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'playing', 'played')),
         mp3_path TEXT,
+        source_url TEXT,
         duration_seconds REAL NOT NULL DEFAULT 0,
         source_type TEXT NOT NULL DEFAULT 'text_request' CHECK(source_type IN ('upload', 'text_request')),
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -184,6 +185,7 @@ async def init_db() -> None:
 
     # Migration for older databases that predate the stricter guest-link model.
     for stmt in [
+        "ALTER TABLE music_requests ADD COLUMN source_url TEXT",
         "ALTER TABLE access_links ADD COLUMN purpose TEXT NOT NULL DEFAULT 'login'",
         "ALTER TABLE access_links ADD COLUMN allowed_role TEXT NOT NULL DEFAULT 'guest'",
         "ALTER TABLE access_links ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1",
