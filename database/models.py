@@ -196,12 +196,18 @@ async def init_db() -> None:
         pass
 
 async def seed_super_admin(username: str, password_hash: str) -> None:
-    """Seed the super admin user if not already present."""
-    existing_user = await fetch_one("SELECT id FROM users WHERE username = ?", (username,))
+    """Seed the super admin user if not already present, or update password to match config."""
+    clean_username = username.strip()
+    existing_user = await fetch_one("SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (clean_username,))
     if not existing_user:
         await execute_query(
             "INSERT INTO users (username, password_hash, role, is_active) VALUES (?, ?, 'super_admin', 1)",
-            (username, password_hash)
+            (clean_username, password_hash)
+        )
+    else:
+        await execute_query(
+            "UPDATE users SET username = ?, password_hash = ?, is_active = 1, role = 'super_admin' WHERE id = ?",
+            (clean_username, password_hash, existing_user["id"])
         )
 
 async def add_audit_log(user_id: Optional[int], action: str, details: Optional[str], ip_address: Optional[str]) -> None:

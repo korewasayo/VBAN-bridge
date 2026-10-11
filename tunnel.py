@@ -90,7 +90,13 @@ def start_tunnel(port: int = 8000) -> None:
                 # Look for the tunnel URL in quick mode
                 if "trycloudflare.com" in line or "https://" in line:
                     logger.info(f"🌐 Tunnel URL: {line}")
-                elif "error" in line.lower():
+                elif "registered tunnel connection" in line.lower():
+                    logger.info(f"🌐 Tunnel: {line}")
+                elif " WRN " in line or line.startswith("WRN") or "trying another address" in line:
+                    logger.warning(f"🌐 Tunnel: {line}")
+                elif " ERR " in line or line.startswith("ERR"):
+                    logger.error(f"🌐 Tunnel: {line}")
+                elif "error" in line.lower() and "wrn" not in line.lower():
                     logger.error(f"🌐 Tunnel: {line}")
                 else:
                     logger.debug(f"🌐 Tunnel: {line}")

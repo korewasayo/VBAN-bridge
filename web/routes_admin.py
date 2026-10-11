@@ -66,6 +66,18 @@ async def change_user_role(request: Request, user_id: int, data: dict, user: dic
     await add_audit_log(user["id"], "change_role", f"Changed role of user {user_id} to {new_role}", ip)
     return {"status": "success"}
 
+@router.patch("/admin/api/users/{user_id}/password")
+async def change_user_password(request: Request, user_id: int, data: dict, user: dict = Depends(require_role("super_admin"))):
+    new_password = data.get("password")
+    if not new_password or len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    
+    hashed_pw = hash_password(new_password)
+    await execute_query("UPDATE users SET password_hash = ? WHERE id = ?", (hashed_pw, user_id))
+    ip = get_client_ip(request)
+    await add_audit_log(user["id"], "change_password", f"Changed password for user {user_id}", ip)
+    return {"status": "success"}
+
 @router.get("/admin/api/audit-log")
 async def get_audit_log(user: dict = Depends(require_role("admin", "super_admin"))):
     logs = await fetch_all('''
