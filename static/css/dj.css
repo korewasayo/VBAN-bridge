@@ -1,0 +1,207 @@
+/* ==============================
+   DJ Live Mic — Styles
+   ============================== */
+
+.dj-card {
+    padding-top: 20px;
+}
+
+/* Info row: stream name, sample rate, format, duration */
+.dj-info-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+
+.dj-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 120px;
+}
+
+.dj-info-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+}
+
+.dj-info-value {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Visualizer */
+.dj-visualizer-wrap {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 18px;
+    background: rgba(10, 10, 13, 0.9);
+}
+
+.dj-visualizer-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 120px;
+}
+
+/* Level meter */
+.dj-meter-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.dj-meter-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-secondary);
+    min-width: 42px;
+    flex-shrink: 0;
+}
+
+.dj-meter-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-element);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.dj-meter-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent-green);
+    border-radius: 4px;
+    transition: width 0.08s linear, background 0.3s ease;
+}
+
+.dj-meter-db {
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    min-width: 62px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* Gain slider */
+.dj-gain-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.dj-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: var(--bg-element);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.dj-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent-blue);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    transition: transform 0.15s ease;
+}
+
+.dj-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.dj-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--accent-blue);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Go Live / Stop button */
+.dj-btn-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.dj-btn-live {
+    font-size: 1.2rem;
+    padding: 16px 48px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--accent-green), #17a34a);
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+    box-shadow: 0 6px 24px rgba(29, 185, 84, 0.35);
+}
+
+.dj-btn-live:hover {
+    transform: scale(1.04);
+    box-shadow: 0 8px 32px rgba(29, 185, 84, 0.5);
+}
+
+.dj-btn-live:active {
+    transform: scale(0.97);
+}
+
+.dj-btn-live.dj-btn-stop {
+    background: linear-gradient(135deg, var(--accent-red), #c0392b);
+    box-shadow: 0 6px 24px rgba(241, 91, 91, 0.35);
+}
+
+.dj-btn-live.dj-btn-stop:hover {
+    box-shadow: 0 8px 32px rgba(241, 91, 91, 0.5);
+}
+
+/* Status pills */
+.dj-pill-on {
+    background: rgba(29, 185, 84, 0.14);
+    border: 1px solid rgba(29, 185, 84, 0.5);
+    color: var(--accent-green);
+    animation: pulse 2s infinite;
+}
+
+.dj-pill-off {
+    background: rgba(163, 169, 184, 0.1);
+    border: 1px solid rgba(163, 169, 184, 0.3);
+    color: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .dj-info-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .dj-btn-live {
+        width: 100%;
+        padding: 16px 20px;
+    }
+
+    .dj-meter-wrap,
+    .dj-gain-wrap {
+        flex-wrap: wrap;
+    }
+}
