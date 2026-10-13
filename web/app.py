@@ -93,7 +93,7 @@ def create_application(lifespan: Callable) -> FastAPI:
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Vary"] = "Origin, Referer"
@@ -103,7 +103,7 @@ def create_application(lifespan: Callable) -> FastAPI:
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob: https:; "
             "media-src 'self' blob:; "
-            "connect-src 'self';"
+            "connect-src 'self' ws: wss:;"
         )
         response.headers["Content-Security-Policy"] = csp
         return response
@@ -127,11 +127,13 @@ def create_application(lifespan: Callable) -> FastAPI:
     from web.routes_vban import router as vban_router
     from web.routes_links import router as links_router
     from web.routes_requests import router as requests_router
+    from web.routes_dj import router as dj_router
 
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(vban_router)
     app.include_router(links_router)
     app.include_router(requests_router)
+    app.include_router(dj_router)
 
     return app
