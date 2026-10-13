@@ -7,6 +7,7 @@ A web-based music request system built on top of VBAN audio routing. Users acces
 - 🎶 Music request queue (FIFO)
 - 📤 MP3 file upload with multi-layer security validation
 - 🎞️ Video-link audio extraction and direct live-stream audio playback over VBAN
+- 🎤 DJ live microphone streaming to VR speakers via browser
 - 🔐 Role-Based Access Control (Super Admin, Admin, Moderator, User)
 - 🔗 One-time access links (single-use, auto-expiring)
 - 🌐 Cloudflare Tunnel integration (IP hidden, DDoS protected)
@@ -41,6 +42,25 @@ python server.py --tunnel
 ### 5. Open the Dashboard
 Navigate to `http://localhost:8000` or your Cloudflare domain.
 
+## DJ Live Microphone
+
+Navigate to `/dj` to stream your microphone directly to all connected VR speakers over VBAN. The page captures audio via the browser's `getUserMedia` API and sends raw PCM frames over a WebSocket. The server re-broadcasts each frame as a VBAN packet to every active route destination.
+
+**Access control:** Only users with the `live_mic` permission (super_admin, admin, moderator) can access the DJ page. Only one DJ can stream at a time.
+
+**Configuration (`.env`):**
+| Variable | Default | Description |
+|---|---|---|
+| `DJ_STREAM_NAME` | `DJLive` | VBAN stream name for the live mic (max 16 chars) |
+| `DJ_SAMPLE_RATE` | `48000` | Audio sample rate in Hz |
+
+**Features:**
+- Real-time waveform visualizer
+- RMS level meter with dB readout
+- Gain slider (0–200%)
+- Live duration timer
+- Works on desktop and mobile browsers
+
 ## Security Events and Bans
 Failed admin logins and invalid access codes are recorded as categorized audit events with the client IP, request method, path, and user-agent. The admin Audit Log tab can filter by category or search event details. Five failed attempts from an IP within ten minutes trigger a 30-minute application ban. Repeated rate-limit rejections are also written as structured `SECURITY_EVENT` log entries.
 
@@ -51,6 +71,7 @@ The server binds to loopback by default. Set `WEB_HOST=0.0.0.0` only when direct
 ## Architecture
 - **Backend**: FastAPI + SQLite (async via aiosqlite)
 - **Audio**: VBAN UDP protocol + ffplay for MP3 playback
+- **DJ Mic**: WebSocket (browser PCM) → VBAN UDP packets
 - **Security**: RBAC, one-time links, rate limiting, file validation
 - **Tunnel**: Cloudflare Tunnel (cloudflared)
 
