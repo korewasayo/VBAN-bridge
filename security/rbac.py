@@ -17,16 +17,19 @@ PERMISSIONS = {
     "super_admin": [
         "manage_requests", "manage_channels", "manage_users",
         "manage_roles", "generate_links", "view_dashboard",
-        "submit_request", "upload_media", "view_queue", "manage_system"
+        "submit_request", "upload_media", "view_queue", "manage_system",
+        "live_mic"
     ],
     "admin": [
         "manage_requests", "manage_channels", "manage_users",
         "generate_links", "view_dashboard",
-        "submit_request", "upload_media", "view_queue"
+        "submit_request", "upload_media", "view_queue",
+        "live_mic"
     ],
     "moderator": [
         "manage_requests", "view_dashboard",
-        "submit_request", "upload_media", "view_queue"
+        "submit_request", "upload_media", "view_queue",
+        "live_mic"
     ],
     "user": [
         "submit_request", "upload_media", "view_queue"

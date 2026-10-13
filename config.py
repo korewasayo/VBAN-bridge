@@ -143,3 +143,8 @@ SUPER_ADMIN_PASSWORD = os.environ.get("SUPER_ADMIN_PASSWORD", "")
 # --- CLOUDFLARE ---
 CLOUDFLARE_TUNNEL_TOKEN = os.environ.get("CLOUDFLARE_TUNNEL_TOKEN", "")
 DOMAIN = os.environ.get("DOMAIN", "localhost")
+
+# --- DJ LIVE MIC ---
+DJ_STREAM_NAME = os.environ.get("DJ_STREAM_NAME", "DJLive")[:16]
+DJ_SAMPLE_RATE = int(os.environ.get("DJ_SAMPLE_RATE", 48000))
+
