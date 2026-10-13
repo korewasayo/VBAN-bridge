@@ -155,8 +155,8 @@
                 // 1. Get mic permission
                 micStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
-                        channelCount: 2,
-                        sampleRate: SAMPLE_RATE,
+                        channelCount: { ideal: 2 },
+                        sampleRate: { ideal: SAMPLE_RATE },
                         echoCancellation: false,
                         noiseSuppression: false,
                         autoGainControl: false,
@@ -167,6 +167,9 @@
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)({
                     sampleRate: SAMPLE_RATE
                 });
+                if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume();
+                }
                 const source = audioCtx.createMediaStreamSource(micStream);
 
                 // Gain
@@ -179,14 +182,23 @@
 
                 // ScriptProcessor to capture raw PCM
                 // 256 samples per buffer × 2 channels = raw frames
-                scriptNode = audioCtx.createScriptProcessorNode(256, 2, 2);
+                const createScriptProcessor = audioCtx.createScriptProcessor || audioCtx.createJavaScriptNode;
+                if (!createScriptProcessor) {
+                    throw new Error('Web Audio ScriptProcessor is not supported in this browser.');
+                }
+                scriptNode = createScriptProcessor.call(audioCtx, 256, 2, 2);
                 scriptNode.onaudioprocess = onAudioProcess;
 
-                // Connect: source → gain → analyser → scriptNode → destination (silent)
+                // Connect: source → gain → analyser → scriptNode → muteNode → destination
+                // (muteNode prevents local acoustic feedback while keeping the script processor alive)
+                const muteNode = audioCtx.createGain();
+                muteNode.gain.value = 0;
+
                 source.connect(gainNode);
                 gainNode.connect(analyser);
                 analyser.connect(scriptNode);
-                scriptNode.connect(audioCtx.destination);
+                scriptNode.connect(muteNode);
+                muteNode.connect(audioCtx.destination);
 
                 // 3. Open WebSocket
                 ws = new WebSocket(WS_PATH);
