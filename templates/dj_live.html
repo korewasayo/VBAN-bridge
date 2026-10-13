@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DJ Live Mic — VBAN Bridge</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/dj.css">
+</head>
+<body>
+    <div class="page-shell">
+        <!-- Top bar -->
+        <header class="topbar">
+            <div class="brand-wrap">
+                <div class="brand-mark">🎤</div>
+                <div>
+                    <div class="brand-title">DJ Live</div>
+                    <div class="brand-subtitle">Stream your mic to VR speakers</div>
+                </div>
+            </div>
+            <div class="user-panel">
+                <span class="user-badge">{{ user.username }} · {{ user.role }}</span>
+                <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- Status card -->
+            <div class="card hero-card">
+                <div class="hero-copy">
+                    <p class="eyebrow">Live Microphone</p>
+                    <h2>Stream to <span style="color:var(--accent-green)">VBAN</span></h2>
+                    <p style="color:var(--text-secondary); margin-top:6px;">
+                        Accept mic permissions, hit Go Live, and your audio streams directly to all connected VR speakers.
+                    </p>
+                </div>
+            </div>
+
+            <!-- DJ Controls -->
+            <div class="card dj-card">
+                <div class="card-header">
+                    <h3 style="margin:0;">🎛️ Controls</h3>
+                    <span id="status-pill" class="pill dj-pill-off">OFFLINE</span>
+                </div>
+
+                <!-- Stream info -->
+                <div class="dj-info-row">
+                    <div class="dj-info-item">
+                        <span class="dj-info-label">Stream Name</span>
+                        <span class="dj-info-value" id="stream-name">{{ stream_name }}</span>
+                    </div>
+                    <div class="dj-info-item">
+                        <span class="dj-info-label">Sample Rate</span>
+                        <span class="dj-info-value">{{ sample_rate }} Hz</span>
+                    </div>
+                    <div class="dj-info-item">
+                        <span class="dj-info-label">Format</span>
+                        <span class="dj-info-value">PCM s16le · Stereo</span>
+                    </div>
+                    <div class="dj-info-item">
+                        <span class="dj-info-label">Duration</span>
+                        <span class="dj-info-value" id="duration-display">00:00</span>
+                    </div>
+                </div>
+
+                <!-- Visualizer -->
+                <div class="dj-visualizer-wrap">
+                    <canvas id="visualizer" width="800" height="120"></canvas>
+                </div>
+
+                <!-- Level meter -->
+                <div class="dj-meter-wrap">
+                    <div class="dj-meter-label">Level</div>
+                    <div class="dj-meter-bar">
+                        <div class="dj-meter-fill" id="level-fill"></div>
+                    </div>
+                    <div class="dj-meter-db" id="level-db">-∞ dB</div>
+                </div>
+
+                <!-- Gain slider -->
+                <div class="dj-gain-wrap">
+                    <label for="gain-slider" class="dj-meter-label">Gain</label>
+                    <input type="range" id="gain-slider" min="0" max="200" value="100"
+                           class="dj-slider">
+                    <span class="dj-meter-db" id="gain-display">100%</span>
+                </div>
+
+                <!-- Big button -->
+                <div class="dj-btn-row">
+                    <button id="btn-go-live" class="btn dj-btn-live" onclick="toggleStream()">
+                        🎙️ Go Live
+                    </button>
+                </div>
+
+                <!-- Error area -->
+                <div id="error-box" class="error-message" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // DJ Live Mic — Browser-to-VBAN streaming via WebSocket
+        // ============================================================
+
+        const SAMPLE_RATE = {{ sample_rate }};
+        const BUFFER_SIZE = 1024; // samples per chunk (256 sample-pairs × 2ch × 2bytes = 1024 bytes)
+        const WS_PATH = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/dj`;
+
+        let ws = null;
+        let audioCtx = null;
+        let micStream = null;
+        let scriptNode = null;
+        let analyser = null;
+        let gainNode = null;
+        let isStreaming = false;
+        let startTime = 0;
+        let durationTimer = null;
+        let animFrameId = null;
+
+        // ---- UI refs ----
+        const btnGoLive     = document.getElementById('btn-go-live');
+        const statusPill    = document.getElementById('status-pill');
+        const levelFill     = document.getElementById('level-fill');
+        const levelDb       = document.getElementById('level-db');
+        const gainSlider    = document.getElementById('gain-slider');
+        const gainDisplay   = document.getElementById('gain-display');
+        const durationDisp  = document.getElementById('duration-display');
+        const errorBox      = document.getElementById('error-box');
+        const canvas        = document.getElementById('visualizer');
+        const canvasCtx     = canvas.getContext('2d');
+
+        // ---- Gain slider ----
+        gainSlider.addEventListener('input', () => {
+            const pct = parseInt(gainSlider.value);
+            gainDisplay.textContent = pct + '%';
+            if (gainNode) {
+                gainNode.gain.value = pct / 100;
+            }
+        });
+
+        // ---- Main toggle ----
+        async function toggleStream() {
+            if (isStreaming) {
+                stopStream();
+            } else {
+                await startStream();
+            }
+        }
+
+        async function startStream() {
+            hideError();
+            try {
+                // 1. Get mic permission
+                micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 2,
+                        sampleRate: SAMPLE_RATE,
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                    }
+                });
+
+                // 2. Set up Web Audio pipeline
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: SAMPLE_RATE
+                });
+                const source = audioCtx.createMediaStreamSource(micStream);
+
+                // Gain
+                gainNode = audioCtx.createGain();
+                gainNode.gain.value = parseInt(gainSlider.value) / 100;
+
+                // Analyser for visualizer
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+
+                // ScriptProcessor to capture raw PCM
+                // 256 samples per buffer × 2 channels = raw frames
+                scriptNode = audioCtx.createScriptProcessorNode(256, 2, 2);
+                scriptNode.onaudioprocess = onAudioProcess;
+
+                // Connect: source → gain → analyser → scriptNode → destination (silent)
+                source.connect(gainNode);
+                gainNode.connect(analyser);
+                analyser.connect(scriptNode);
+                scriptNode.connect(audioCtx.destination);
+
+                // 3. Open WebSocket
+                ws = new WebSocket(WS_PATH);
+                ws.binaryType = 'arraybuffer';
+
+                ws.onopen = () => {
+                    isStreaming = true;
+                    startTime = Date.now();
+                    setUI(true);
+                    startDurationTimer();
+                    startVisualizer();
+                };
+
+                ws.onclose = (e) => {
+                    if (e.code === 4409) {
+                        showError(e.reason || 'Another DJ is already live.');
+                    } else if (e.code === 4401) {
+                        showError('Session expired. Please log in again.');
+                    }
+                    stopStream();
+                };
+
+                ws.onerror = () => {
+                    showError('WebSocket connection failed.');
+                    stopStream();
+                };
+
+            } catch (err) {
+                if (err.name === 'NotAllowedError') {
+                    showError('Microphone permission denied. Please allow mic access and try again.');
+                } else if (err.name === 'NotFoundError') {
+                    showError('No microphone found. Please connect a mic and try again.');
+                } else {
+                    showError('Could not start stream: ' + err.message);
+                }
+                stopStream();
+            }
+        }
+
+        function onAudioProcess(e) {
+            if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+            const left  = e.inputBuffer.getChannelData(0);
+            const right = e.inputBuffer.numberOfChannels > 1
+                ? e.inputBuffer.getChannelData(1)
+                : left;
+
+            // Interleave L/R into s16le PCM
+            const len = left.length;
+            const buffer = new ArrayBuffer(len * 4); // 2 ch × 2 bytes
+            const view = new DataView(buffer);
+
+            for (let i = 0; i < len; i++) {
+                const l = Math.max(-1, Math.min(1, left[i]));
+                const r = Math.max(-1, Math.min(1, right[i]));
+                view.setInt16(i * 4,     l < 0 ? l * 0x8000 : l * 0x7FFF, true);
+                view.setInt16(i * 4 + 2, r < 0 ? r * 0x8000 : r * 0x7FFF, true);
+            }
+
+            ws.send(buffer);
+
+            // Update level meter
+            updateLevelMeter(left);
+        }
+
+        function stopStream() {
+            isStreaming = false;
+
+            if (ws && ws.readyState <= WebSocket.OPEN) {
+                ws.close();
+            }
+            ws = null;
+
+            if (scriptNode) {
+                scriptNode.disconnect();
+                scriptNode = null;
+            }
+            if (gainNode) {
+                gainNode.disconnect();
+                gainNode = null;
+            }
+            if (analyser) {
+                analyser.disconnect();
+                analyser = null;
+            }
+            if (audioCtx) {
+                audioCtx.close().catch(() => {});
+                audioCtx = null;
+            }
+            if (micStream) {
+                micStream.getTracks().forEach(t => t.stop());
+                micStream = null;
+            }
+
+            clearInterval(durationTimer);
+            cancelAnimationFrame(animFrameId);
+            setUI(false);
+        }
+
+        // ---- UI helpers ----
+        function setUI(live) {
+            if (live) {
+                btnGoLive.textContent = '⏹️ Stop';
+                btnGoLive.classList.add('dj-btn-stop');
+                statusPill.textContent = 'LIVE';
+                statusPill.className = 'pill dj-pill-on';
+            } else {
+                btnGoLive.textContent = '🎙️ Go Live';
+                btnGoLive.classList.remove('dj-btn-stop');
+                statusPill.textContent = 'OFFLINE';
+                statusPill.className = 'pill dj-pill-off';
+                levelFill.style.width = '0%';
+                levelDb.textContent = '-∞ dB';
+                durationDisp.textContent = '00:00';
+                clearCanvas();
+            }
+        }
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.style.display = 'block';
+        }
+
+        function hideError() {
+            errorBox.style.display = 'none';
+        }
+
+        // ---- Duration timer ----
+        function startDurationTimer() {
+            durationTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const s = String(elapsed % 60).padStart(2, '0');
+                durationDisp.textContent = `${m}:${s}`;
+            }, 1000);
+        }
+
+        // ---- Level meter ----
+        function updateLevelMeter(channelData) {
+            let sum = 0;
+            for (let i = 0; i < channelData.length; i++) {
+                sum += channelData[i] * channelData[i];
+            }
+            const rms = Math.sqrt(sum / channelData.length);
+            const db = 20 * Math.log10(Math.max(rms, 1e-10));
+            const pct = Math.min(100, Math.max(0, ((db + 60) / 60) * 100));
+
+            levelFill.style.width = pct + '%';
+            levelDb.textContent = db > -60 ? db.toFixed(1) + ' dB' : '-∞ dB';
+
+            // Color gradient: green → yellow → red
+            if (pct > 85) {
+                levelFill.style.background = 'var(--accent-red)';
+            } else if (pct > 60) {
+                levelFill.style.background = 'var(--accent-yellow)';
+            } else {
+                levelFill.style.background = 'var(--accent-green)';
+            }
+        }
+
+        // ---- Visualizer (waveform) ----
+        function startVisualizer() {
+            function draw() {
+                if (!analyser) return;
+                animFrameId = requestAnimationFrame(draw);
+
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                analyser.getByteTimeDomainData(dataArray);
+
+                // Resize canvas to container
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = 120;
+
+                canvasCtx.fillStyle = 'rgba(10, 10, 13, 0.85)';
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                canvasCtx.lineWidth = 2;
+                canvasCtx.strokeStyle = '#1db954';
+                canvasCtx.beginPath();
+
+                const sliceWidth = canvas.width / bufferLength;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0;
+                    const y = (v * canvas.height) / 2;
+
+                    if (i === 0) canvasCtx.moveTo(x, y);
+                    else canvasCtx.lineTo(x, y);
+
+                    x += sliceWidth;
+                }
+
+                canvasCtx.lineTo(canvas.width, canvas.height / 2);
+                canvasCtx.stroke();
+            }
+            draw();
+        }
+
+        function clearCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = 120;
+            canvasCtx.fillStyle = 'rgba(10, 10, 13, 1)';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+            canvasCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(0, canvas.height / 2);
+            canvasCtx.lineTo(canvas.width, canvas.height / 2);
+            canvasCtx.stroke();
+        }
+
+        // Draw idle state on load
+        window.addEventListener('load', clearCanvas);
+        window.addEventListener('resize', () => { if (!isStreaming) clearCanvas(); });
+    </script>
+</body>
+</html>
